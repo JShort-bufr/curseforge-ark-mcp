@@ -11,21 +11,55 @@ export interface ToolContext {
 }
 
 /**
- * THE SENTENCE EVERY TOOL OUTPUT CARRIES.
+ * THE VERIFICATION SENTENCE EVERY TOOL OUTPUT CARRIES.
  *
- * ADR-002 §13 ships this repo as v0 and gates the word "verified". Commit
- * 5481c04 in the sibling repo corrected THREE field paths that were wrong until
- * checked against live responses, in a repo whose fixtures were built the same
- * careful way these were. So every field below is read off a published schema
- * and none has been observed.
+ * AMENDED 2026-08-18 by office-backend-engineer, after the first authenticated
+ * run (ADR-002 §13.5 phase 6). The previous text said "No authenticated
+ * CurseForge call has ever been made from this repo" and appeared 32 times in a
+ * single smoke run. That is now FALSE, and a false disclaimer is worse than none:
+ * it trains a reader to skip the disclaimer that is still true.
  *
- * This note is attached to tool output rather than only to the README because
- * the README is not in the model's context when it reads a result.
+ * What replaced it is narrower on purpose. Some rows resolved; several did not,
+ * and the repo does NOT flip to "verified" because the easy ones landed.
+ *
+ * The long form lives once per tool result (see `verificationBlock`). The short
+ * form below rides on every record, because it is repeated dozens of times per
+ * conversation and a 500-character caveat repeated 32 times is how a caveat gets
+ * skimmed.
  */
-export const V0_NOTE =
-  "v0: every field path in this output is documentation-derived and UNVERIFIED. No authenticated CurseForge " +
-  "call has ever been made from this repo. A null field may mean the API omitted it OR that this client reads " +
-  "the wrong path (ADR-002 §14.3 U3/U4/U5). Run `npm run smoke` once a key exists to start falsifying that.";
+export const FIELD_PATH_NOTE =
+  "Mod/File field paths confirmed against live responses 2026-08-18. Still unconfirmed: the FileDependency " +
+  "shape, and the meaning of the releaseType/relationType integers — both surfaced raw, never mapped.";
+
+/**
+ * The long form, carried once per tool result.
+ *
+ * Numbers rather than adjectives: a reader deciding how much to trust this needs
+ * the sample size, not the word "extensive".
+ */
+export const VERIFICATION_BLOCK = {
+  stage: "v0.2 — partially verified",
+  field_paths_confirmed_live_on: "2026-08-18",
+  sample: "748 distinct ARK: Survival Ascended mods, 1899 file records",
+  confirmed:
+    "Every Mod and File path this client reads was present and correctly typed in live responses: Mod " +
+    "id/gameId/name/slug/dateModified/links.websiteUrl/categories/allowModDistribution/latestFiles/" +
+    "latestFilesIndexes, and File id/modId/displayName/fileName/fileDate/isAvailable/gameVersions/" +
+    "sortableGameVersions/releaseType/dependencies. No field path needed correcting.",
+  still_unconfirmed:
+    "The FileDependency shape { modId, relationType } was NEVER observed: 0 of 1899 sampled ASA files " +
+    "declared a dependency, with the `dependencies` key present and empty every time. So the traversal's " +
+    "edge shape is still documentation-derived, and the FileRelationType integers remain both unpublished " +
+    "AND unobserved. FileReleaseType integers 1, 2 and 3 have now been SEEN (1893/3/3 occurrences), which " +
+    "establishes that the set has at least three members and establishes NOTHING about which integer means " +
+    "release, beta or alpha.",
+  register: "docs/adr/ADR-002-endpoint-allow-list.md §14.3, and the README's unverified table",
+} as const;
+
+/** The long-form block, for the top level of a tool result. */
+export function verificationBlock(): Record<string, unknown> {
+  return { ...VERIFICATION_BLOCK };
+}
 
 /**
  * `FileReleaseType` is a bare integer and its meaning is NOT PUBLISHED.
@@ -43,7 +77,10 @@ export const V0_NOTE =
 export const RELEASE_TYPE_NOTE =
   "releaseType is surfaced as a RAW INTEGER and is deliberately NOT mapped to release/beta/alpha. CurseForge " +
   "publishes no value table for it (ADR-002 §14.3 U7). Do not assume 1 means release. If you need to filter on " +
-  "release type, pass the integer you mean and state why you believe it.";
+  "release type, pass the integer you mean and state why you believe it. OBSERVED LIVE 2026-08-18 across 1899 " +
+  "ASA files: 1 (1893 files), 2 (3) and 3 (3). That establishes the set has at least three members and " +
+  "establishes NOTHING about which is release, beta or alpha — a frequency distribution is not a value table, " +
+  "and inferring 1=release because 1 is commonest is precisely the guess this repo refuses to make.";
 
 /**
  * `FileRelationType` is a bare integer and its meaning is NOT RESOLVED.
@@ -52,13 +89,22 @@ export const RELEASE_TYPE_NOTE =
  * than U7 because it changes behaviour: required vs optional vs tool decides
  * whether an edge is FOLLOWED AT ALL. §7.2 therefore blocks on it, and the
  * traversal over-collects on purpose and says so.
+ *
+ * AMENDED 2026-08-18: it is now worse than unpublished, it is UNOBSERVABLE in
+ * this catalog. A 1899-file sample across 748 ASA mods produced ZERO dependency
+ * edges — `dependencies` was present and empty every single time. ADR-002's own
+ * risk register anticipated this ("U6 may not be resolvable even with a key"),
+ * and named the consequence: the unmapped-integer behaviour is THE ANSWER, not a
+ * stopgap. Nothing here changes; the reason it does not change is now evidence
+ * rather than caution.
  */
 export const RELATION_TYPE_NOTE =
   "relationType is surfaced as a RAW INTEGER and is deliberately NOT mapped to required/optional/tool/" +
   "incompatible. CurseForge publishes no value table for it (ADR-002 §14.3 U6), so this traversal follows EVERY " +
   "edge rather than guessing which ones are required. The result therefore OVER-COLLECTS: some listed mods are " +
   "probably optional or tool relationships, not requirements. A wrong label here would produce a dependency " +
-  "list that is wrong in a way nobody would check.";
+  "list that is wrong in a way nobody would check. OBSERVED LIVE 2026-08-18: no relationType integer has ever " +
+  "been seen, because no ASA file in a 1899-file sample declared any dependency at all.";
 
 /** A page block, with its completeness sentence, ready to drop into a tool result. */
 export function pageBlock(page: PageDescriptor | null): Record<string, unknown> {
@@ -104,7 +150,7 @@ export function shapeMod(mod: unknown): Record<string, unknown> {
     allow_mod_distribution: asBool(at(mod, "allowModDistribution")),
     latest_files: (asArray(at(mod, "latestFiles")) ?? []).map(shapeFile),
     latest_files_indexes: asArray(at(mod, "latestFilesIndexes")),
-    unverified: V0_NOTE,
+    field_paths: FIELD_PATH_NOTE,
   };
 }
 
@@ -112,6 +158,20 @@ export function shapeMod(mod: unknown): Record<string, unknown> {
  * Shape a `File` record (ADR-002 §14.3 U4).
  *
  * `dependencies` is preserved as edges with the raw relation integer (U6).
+ *
+ * WHAT THIS FUNCTION OMITS IS NOW LOAD-BEARING. Observed live 2026-08-18: a real
+ * File record carries a `downloadUrl` field, populated. ADR-002 §1.7 keeps the
+ * download-url ENDPOINT off the allow-list, which was the whole control as
+ * written — but the URL arrives anyway, inside every file record, on endpoints
+ * that ARE allowed. So the endpoint exclusion alone does not deliver DEC-002
+ * §11.3's "no download or install"; this allow-list-shaped shaper is the other
+ * half, and passing a raw file record through would defeat it. There is a test
+ * whose fixture CONTAINS a downloadUrl specifically to prove it does not survive.
+ *
+ * Also omitted, for the same reason but lower stakes: fileStatus, hashes,
+ * fileLength, downloadCount, fileSizeOnDisk, alternateFileId, isServerPack,
+ * fileFingerprint, modules, cookingInfo. All real, none needed by v1's seven
+ * tools, and each one is context a model would have to read past.
  */
 export function shapeFile(file: unknown): Record<string, unknown> {
   return {
@@ -126,7 +186,7 @@ export function shapeFile(file: unknown): Record<string, unknown> {
     release_type_raw: asNumber(at(file, "releaseType")),
     release_type_note: RELEASE_TYPE_NOTE,
     dependencies: shapeDependencies(at(file, "dependencies")),
-    unverified: V0_NOTE,
+    field_paths: FIELD_PATH_NOTE,
   };
 }
 

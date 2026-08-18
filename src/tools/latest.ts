@@ -3,7 +3,7 @@ import { MAX_PAGE_SIZE } from "../allowlist.js";
 import { asArray, asNumber, asString, at } from "../coerce.js";
 import { CurseForgeError } from "../errors.js";
 import type { ToolDef } from "../registry.js";
-import { RELEASE_TYPE_NOTE, shapeFile, V0_NOTE, type ToolContext } from "./context.js";
+import { RELEASE_TYPE_NOTE, shapeFile, verificationBlock, type ToolContext } from "./context.js";
 
 /**
  * `get_latest_file` — THE SURVEILLANCE PRIMITIVE (ADR-002 §7.1).
@@ -175,7 +175,7 @@ export function latestFileTools(ctx: ToolContext): ToolDef[] {
           candidates_after_filter: filtered.length,
           fallback_page: fallbackPage,
           release_type_note: RELEASE_TYPE_NOTE,
-          unverified: V0_NOTE,
+          verification: verificationBlock(),
         };
 
         if (filtered.length === 0) {

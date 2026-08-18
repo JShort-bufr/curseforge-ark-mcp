@@ -15,12 +15,18 @@ import type { ToolContext } from "../src/tools/context.js";
  * from CurseForge's published response schemas — field names, nesting, and the
  * `{ data, pagination }` envelope are all as documented. EVERY VALUE IS INVENTED.
  *
- * And the structure is a HYPOTHESIS TOO, which is the part that matters here and
- * is worse than it was next door. The sibling repo's fixtures were built the same
- * careful way from Nitrado's documentation, and commit 5481c04 corrected THREE
- * field paths that were wrong until checked live. So a passing test in this file
- * proves that this client handles the shape it was written for. It does NOT prove
- * CurseForge sends that shape. Nobody here has ever seen a CurseForge response.
+ * AMENDED 2026-08-18. The structure is no longer a hypothesis: it was checked
+ * against 1899 live file records across 748 mods, and the nested shapes below
+ * (`sortableGameVersions`, `latestFilesIndexes`, and the presence of a populated
+ * `downloadUrl` on every file) are now copied from what the API actually sends.
+ * Every VALUE is still invented, which is the half of the rule that never expires.
+ *
+ * One structural element remains a hypothesis, and it is the one that matters:
+ * `dependencies` entries. Zero dependency edges existed in that entire sample, so
+ * the `{ modId, relationType }` element shape below is still documentation-derived
+ * and the fixture is the ONLY place it has ever appeared. Tests over it prove this
+ * client handles the shape it was written for, and nothing about what CurseForge
+ * would send if an ASA mod ever declared one.
  *
  * PREIMAGE DISCIPLINE, non-negotiable (§1.8): a test that proves a request was
  * refused must first prove the request would otherwise have been sent, and a test
@@ -56,6 +62,12 @@ export const FAKE_RELEASE_TYPE = 71;
 export const FAKE_OTHER_RELEASE_TYPE = 72;
 
 export const FAKE_GAME_VERSION = "9.99.9-synthetic";
+
+/**
+ * The download URL that must never reach a tool result. Distinctive so a leak test
+ * can search for it by substring, in the sibling repo's idiom.
+ */
+export const FAKE_DOWNLOAD_URL_MARKER = "should-never-be-surfaced";
 
 export function testConfig(overrides: Partial<Config> = {}): Config {
   return {
@@ -177,8 +189,28 @@ export function fileRecord(
     releaseType: FAKE_RELEASE_TYPE,
     isAvailable: true,
     gameVersions: [FAKE_GAME_VERSION],
-    sortableGameVersions: [{ gameVersionName: FAKE_GAME_VERSION, gameVersion: "9.99.9" }],
+    // Inner shape copied from a live record (2026-08-18); values invented.
+    sortableGameVersions: [
+      {
+        gameVersionName: FAKE_GAME_VERSION,
+        gameVersionPadded: "0000000009.0000000099",
+        gameVersion: "9.99.9",
+        gameVersionReleaseDate: "2026-01-01T00:00:00Z",
+        gameVersionTypeId: 99_367,
+      },
+    ],
     dependencies: [{ modId: FAKE_DEP_MOD_ID, relationType: FAKE_RELATION_TYPE }],
+    /**
+     * PRESENT ON PURPOSE, and this fixture field is a control rather than realism.
+     *
+     * Live File records carry a populated `downloadUrl`. DEC-002 §11.3 refuses any
+     * download or install capability, and ADR-002 §1.7 delivers that by keeping the
+     * download-url ENDPOINT off the allow-list — which turns out not to be
+     * sufficient on its own, because the URL rides along inside records fetched
+     * from endpoints that ARE allowed. `shapeFile` drops it. This value exists so
+     * the test proving it gets dropped has a non-empty preimage.
+     */
+    downloadUrl: `https://example.invalid/synthetic-download/${FAKE_FILE_ID}/should-never-be-surfaced.zip`,
     ...overrides,
   };
 }
@@ -203,7 +235,16 @@ export function modRecord(
     links: { websiteUrl: "https://example.invalid/synthetic-mod" },
     categories: [{ id: 4_242, name: "Synthetic Category" }],
     latestFiles: [fileRecord()],
-    latestFilesIndexes: [{ gameVersion: "9.99.9", fileId: FAKE_FILE_ID, filename: "synthetic-mod-2.1.zip" }],
+    // Inner shape copied from a live record (2026-08-18); values invented.
+    latestFilesIndexes: [
+      {
+        gameVersion: "9.99.9",
+        fileId: FAKE_FILE_ID,
+        filename: "synthetic-mod-2.1.zip",
+        releaseType: FAKE_RELEASE_TYPE,
+        gameVersionTypeId: 99_367,
+      },
+    ],
     ...overrides,
   };
 }
@@ -231,6 +272,7 @@ export const MOD_FIELD_PREIMAGE: readonly string[] = [
 
 /** PREIMAGE for the File field-path tests (§14.3 U4/U5). */
 export const FILE_FIELD_PREIMAGE: readonly string[] = [
+  // Every path below was confirmed present in live responses on 2026-08-18.
   "id",
   "modId",
   "displayName",

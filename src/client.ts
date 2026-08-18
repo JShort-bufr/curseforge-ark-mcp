@@ -318,7 +318,7 @@ export class CurseForgeClient {
       const headers: Record<string, string> = {
         "x-api-key": this.config.apiKey,
         Accept: "application/json",
-        "User-Agent": "curseforge-ark-mcp/0.1.0",
+        "User-Agent": "curseforge-ark-mcp/0.2.0",
       };
 
       let encodedBody: string | undefined;

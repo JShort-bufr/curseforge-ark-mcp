@@ -17,13 +17,34 @@ document should be read as authorising code beyond the scaffold it specifies.
   the shared sequence records that the two are one line of reasoning, not that they share
   a codebase. They share nothing at runtime — see §9.
 
-**What holds acceptance open.** One thing, and it is not resolvable by argument:
+**AMENDMENT 1 — 2026-08-18, `office-backend-engineer`.** Amended in place per §13.5 rather
+than appended as a second version. The key arrived and phase 6 ran. What changed:
 
-> **No CurseForge API key exists.** The key is not self-service — it is granted by
+- **The paragraph immediately below is no longer true, and is struck rather than deleted** so
+  a reader can see what the document claimed before measurement existed.
+- **§14.3 now carries a verdict per row.** U1, U2, U8, U11, U13 RESOLVED; U3, U4, U9, U12
+  resolved with one behaviour the ADR did not anticipate (see U12); U5, U6, U7, U10 STILL
+  OPEN, and U6 is now open for a *stronger* reason than when it was written.
+- **§13.2's prohibition on a "Verified" section has expired** and is amended there.
+- **One finding the ADR missed entirely:** live `File` records carry a populated
+  `downloadUrl`. Keeping the download-url endpoint off the allow-list (§1.7) does **not** by
+  itself deliver DEC-002 §11.3. See the new §14.4.
+- **No field path needed correcting.** That is recorded as an outcome, not a boast: the
+  sibling repo's three-wrong-paths precedent was the reason to check, and checking is what
+  makes the absence of corrections meaningful.
+
+**What held acceptance open, as written before Amendment 1:**
+
+> ~~**No CurseForge API key exists.** The key is not self-service — it is granted by
 > application to Overwolf, and it is non-transferable. Until it arrives, **every claim in
 > this document about the shape of a CurseForge response is documentation-derived.** No
 > authenticated call has been made from this repo. There is no live measurement anywhere in
-> this ADR, and §14 is the register of exactly which claims are which.
+> this ADR, and §14 is the register of exactly which claims are which.~~
+
+**What holds acceptance open now.** The key exists and the catalog answers. Four rows of
+§14.3 remain open, and one of them (U6) is unobservable in the ASA catalog rather than merely
+unchecked — so the unmapped-integer behaviour in §7.2 is now the settled answer rather than a
+stopgap. Acceptance remains a separate reviewed act.
 
 ---
 
@@ -663,9 +684,14 @@ repo whose fixtures were built the same careful way these will be.
   status, and `1.0.0` on a client whose every field path is unconfirmed is a false one.
 - **13.2 — The README carries an explicit unverified-claims table** (DEC-002 action A3,
   `office-technical-writer`), in the sibling repo's own *"Still unverified"* idiom. It must
-  carry, at minimum, every row of §14.3 below. The README must **not** contain a *"Verified
-  against the live account"* section — an empty one invites filling, and its absence is
-  itself accurate.
+  carry, at minimum, every row of §14.3 below that is still open.
+  ~~The README must **not** contain a *"Verified against the live account"* section — an empty
+  one invites filling, and its absence is itself accurate.~~
+  **AMENDED 2026-08-18, `office-backend-engineer`:** that prohibition rested on the section
+  being *empty*, and it no longer is. The README now carries a verified section, and the
+  original hazard is handled by the mechanism rather than by absence: the verified section
+  states its sample size and its date, and the unverified table shrank rather than vanishing.
+  An empty verified section would still be wrong; a sized, dated one is the accurate artifact.
 - **13.3 — `buildinfo` is ported**: generated, gitignored, stamped with commit and dirty
   flag, surfaced by `get_api_diagnostics`. The sibling repo's reasoning applies unchanged —
   a `dist/` built from uncommitted local edits cannot answer "which code produced that
@@ -796,27 +822,56 @@ Three consequences, in order of importance:
    Dev-Kit-cooks-and-uploads path, and whether the upload API is available for ARK: Survival
    Ascended is **unverified**. Flagged for the board; not this ADR's to amend.
 
-### 14.3 UNVERIFIED — the hypothesis register
+### 14.3 The hypothesis register, with verdicts
 
-**Every row is a HYPOTHESIS.** Field paths are read off published schemas, which is exactly
-the artifact class that produced three wrong paths in the sibling repo. The README's
-unverified-claims table (§13.2) must carry all of these.
+**AMENDED 2026-08-18 by `office-backend-engineer`** after the first authenticated run. Written
+as one table rather than two versions, per §13.5. Sample: **748 distinct ASA mods, 1899 file
+records**, drawn from deep search pages (index 1000-6000) and from every documented `sortField`
+1-12, plus full file lists for 100 mods.
 
-| # | Claim | Basis | Why it matters |
+| # | Claim | Verdict 2026-08-18 | Evidence / why still open |
 | --- | --- | --- | --- |
-| **U1** | The ASA `gameId` value | **Undiscoverable without the key** (§5) | A wrong value returns clean, empty, wrong search results |
-| **U2** | Whether ASA is visible to the granted key at all | Undiscoverable without the key | Could block v1 entirely |
-| **U3** | `Mod` fields: `id`, `gameId`, `name`, `slug`, `latestFiles`, `latestFilesIndexes`, `dateModified`, `links`, `categories`, `allowModDistribution` | Published schema | Every tool output |
-| **U4** | `File` fields: `id`, `modId`, `displayName`, `fileName`, `fileDate`, `gameVersions`, `sortableGameVersions`, `dependencies`, `releaseType`, `isAvailable` | Published schema | `get_latest_file`, `list_mod_files` |
-| **U5** | `FileDependency` = `{ modId, relationType }` | Published schema | `resolve_mod_dependencies` traversal |
-| **U6** | **The `FileRelationType` numeric enum mapping** | **NOT RESOLVED.** Three attempts against the docs; the page shows `relationType` as a bare integer with no published value table. Do **not** take a mapping from memory, from a blog, or from this ADR. | Determines whether an edge is required, optional, a tool, or incompatible — i.e. whether it is followed at all. **§7.2 blocks on this.** |
-| **U7** | The `FileReleaseType` numeric enum (release/beta/alpha) | Not resolved from the docs page. **Partial corroboration only:** the Upload API (§14.2) uses the *names* `alpha`, `beta`, `release` — which supports the set, **not** the numeric mapping in the read API. | `get_latest_file` filtering; treating alpha as release is a wrong update recommendation |
-| **U8** | Whether `pagination` is present on every paginated endpoint | Documented shape; never observed | §3 errors rather than assuming one page |
-| **U9** | Whether ASA mods actually populate `dependencies`, `sortableGameVersions`, `latestFilesIndexes` | Schema says they can; ASA-specific behaviour unknown | An always-empty field is a capability gap, not a bug — and §6 requires telling them apart |
-| **U10** | Any id-count cap on `POST /v1/mods` / `POST /v1/mods/files` bodies | **Not documented.** §4.4's 200 is **ours**, not the vendor's | Chunking strategy |
-| **U11** | CurseForge rate limits | **Undocumented.** No published figure found | §7.3 reports observed headers or `null`, never a guess |
-| **U12** | Real pagination behaviour past `index` 0, and behaviour at the 10000 ceiling | Documented constraint only | §4.3's truncation disclosure |
-| **U13** | Base URL `https://api.curseforge.com` | Documentation-derived | Host pin (§1.6) depends on it |
+| **U1** | The ASA `gameId` value | **RESOLVED — `83374`** | slug `ark-survival-ascended`, name `ARK Survival Ascended` (**no colon** — an exact match on the colonised spelling would have failed). Still resolved live, never hardcoded; a test asserts the literal appears nowhere in `src/` outside a comment. |
+| **U2** | Whether ASA is visible to the granted key | **RESOLVED — visible, NOT v1-blocking** | 38 games were visible to the key, and ASA was among them. |
+| **U3** | `Mod` field paths | **RESOLVED — all correct, none needed changing** | `id`, `gameId`, `name`, `slug`, `dateModified`, `links.websiteUrl`, `categories`, `allowModDistribution`, `latestFiles`, `latestFilesIndexes` all present and correctly typed. `allowModDistribution` was absent on 0 of 300 sampled mods. |
+| **U4** | `File` field paths | **RESOLVED — all correct, none needed changing** | `id`, `modId`, `displayName`, `fileName`, `fileDate`, `gameVersions`, `sortableGameVersions`, `dependencies`, `releaseType`, `isAvailable` all present. Nested `sortableGameVersions` carries `{gameVersionName, gameVersionPadded, gameVersion, gameVersionReleaseDate, gameVersionTypeId}`; fixtures now mirror that structure with invented values. |
+| **U5** | `FileDependency` = `{ modId, relationType }` | **STILL OPEN — unobserved** | Not shown wrong; *never seen*. 0 of 1899 files declared a dependency, so no edge object has ever been inspected. The element shape stays documentation-derived, and the fixture is the only place it exists. |
+| **U6** | The `FileRelationType` numeric enum mapping | **STILL OPEN — and now UNOBSERVABLE here** | Unpublished *and* unexercised: `dependencies` was present-and-empty on all 1899 files across 748 mods. This ADR's own risk register predicted it and named the consequence — §7.2's unmapped-integer traversal is **the answer, not a stopgap**. Practical effect: for ASA, `resolve_mod_dependencies` returns single-node trees, and the tool now says so in its own output so an empty tree does not read as a failure. |
+| **U7** | The `FileReleaseType` numeric enum | **STILL OPEN — three values seen, none named** | Observed integers: `1` (1893 files), `2` (3), `3` (3). That establishes the set has at least three members, consistent with the Upload API's alpha/beta/release trio, and establishes **nothing** about which integer is which. A frequency distribution is not a value table; inferring `1 = release` because 1 is commonest is exactly the guess this ADR forbids. |
+| **U8** | Whether `pagination` is present on every paginated endpoint | **RESOLVED — present on E1/E2/E4, absent on E3/E5/E6/E7** | Confirmed by raw inspection of top-level keys: single-record and bulk-read responses carry `{data}` only. The client's split — error on a paginated endpoint, normal elsewhere — is correct as built. |
+| **U9** | Whether ASA mods populate `dependencies`, `sortableGameVersions`, `latestFilesIndexes` | **RESOLVED, and it splits two ways** | `latestFiles` 300/300, `latestFilesIndexes` 300/300, `sortableGameVersions` 300/300, `gameVersions` 300/300 — all populated. `dependencies` present on 100% and non-empty on **0%**. Exactly the "capability gap, not a bug" case this row was written to catch. |
+| **U10** | Any vendor id-count cap on the bulk POSTs | **STILL OPEN — no cap found up to 300** | 200 distinct ids (our own cap) returned 200 records; 300 distinct ids returned HTTP 200 and 300 records. So a vendor cap, if one exists, is **above 300**. Our 200 stays: it is ours, deliberately conservative against an undocumented rate limit, and a probe that found no ceiling has not found the ceiling. |
+| **U11** | CurseForge rate limits | **RESOLVED as far as observation reaches — NO header is sent** | Full header enumeration on a live GET and a live POST returned transport/CDN headers only (`content-type`, `date`, `vary`, `via`, `x-amz-cf-id`, `x-amz-cf-pop`, `x-cache`, `x-cf-ver`). So `observed: null` is not a matching failure in this client — nothing is being sent. **Still not a claim that no limit exists**: an unadvertised limit is still a limit, and the self-imposed pacing stays. |
+| **U12** | Real pagination behaviour past `index` 0, and at the 10000 ceiling | **RESOLVED — and the behaviour was not anticipated** | Paging index 0 to 250 at `pageSize` 50 returned 50 rows each with a stable `totalCount` 6848. But at `index` 9950 the same query returned `resultCount: 0` **and `totalCount: 0`** — so `totalCount` is a property of the RESPONSE, not of the query. Left alone, the page descriptor would have read `total_count: 0 / has_more: false`, which a model reads as "this search found nothing" rather than "you walked off the end of it". `describeCompleteness` now has an explicit past-the-end branch that says which one it is. |
+| **U13** | Base URL `https://api.curseforge.com` | **RESOLVED — correct** | Every call in every probe succeeded against it. The host pin is sound. |
+
+### 14.4 What this ADR missed: `downloadUrl` arrives inside allowed responses
+
+**NEW 2026-08-18, `office-backend-engineer`.** Found by reading live output rather than by any
+test, which is part of the finding.
+
+A live `File` record carries a **populated `downloadUrl`**. §1.7 removes
+`GET /v1/mods/{modId}/files/{fileId}/download-url` from the allow-list and treats that as
+delivering DEC-002 §11.3's refusal of any download or install capability. **On its own, it does
+not.** The URL rides along inside file records returned by E3, E4, E5 and E7 — endpoints that
+are on the list and have to be.
+
+What actually delivers §11.3 is two controls, not one:
+
+1. the endpoint exclusion (§1.7), which stops this server *minting* a fresh download URL; and
+2. the response shapers, which build tool output field by field and never pass a raw upstream
+   record through — so `downloadUrl` is dropped unseen.
+
+The second was written for a different reason (keeping irrelevant and attacker-authorable
+fields out of the model's context, §12.3) and turns out to be load-bearing for §11.3. That is
+now recorded rather than incidental, and there is a test whose fixture *contains* a
+`downloadUrl` specifically to prove it survives into none of the four tools that touch file
+records. A future contributor who "simplifies" a shaper into a passthrough would delete a
+board-level refusal without touching the allow-list that refusal is documented against.
+
+Also dropped by the shapers, for the lesser reason: `fileStatus`, `hashes`, `fileLength`,
+`downloadCount`, `fileSizeOnDisk`, `alternateFileId`, `isServerPack`, `fileFingerprint`,
+`modules`, `cookingInfo`; and on `Mod`: `screenshots`, `summary`, `status`, `downloadCount`.
 
 ---
 
@@ -882,6 +937,9 @@ Risks to the plan itself:
 - **U6 may not be resolvable even with a key** if no ASA mod in the catalog exercises every
   relation type. In that case §7.2's unmapped-integer behaviour is not a stopgap, it is the
   answer, and the README should say so.
+  **REALISED 2026-08-18, `office-backend-engineer`:** this is what happened, and in a stronger
+  form than the wording allowed for — no ASA mod exercised *any* relation type. 0 dependency
+  edges across 1899 files. The prediction was right, and the README says so.
 - **The key application may be refused.** v0 ships regardless. CFWidget / CurseUpdate is
   investigated only then, and only as a fallback (DEC-002 §11.2).
 

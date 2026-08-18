@@ -1,8 +1,9 @@
 import { type BuildInfo, buildInfo } from "../buildinfo.js";
 import { ENDPOINT_ALLOWLIST, MAX_ADDRESSABLE_RESULTS, MAX_BULK_IDS, MAX_PAGE_SIZE, PINNED_ORIGIN, POST_CAPABLE_TOOLS } from "../allowlist.js";
 import { CurseForgeError } from "../errors.js";
+import { openRows } from "../probe-plan.js";
 import type { ToolDef } from "../registry.js";
-import { V0_NOTE, type ToolContext } from "./context.js";
+import { verificationBlock, type ToolContext } from "./context.js";
 
 /**
  * Say what the build stamp does and does not prove.
@@ -64,16 +65,25 @@ export function diagnosticsTools(ctx: ToolContext): ToolDef[] {
 
         return {
           version_posture: {
-            version: "0.1.0",
-            stage: "v0",
-            field_paths_verified: false,
-            live_calls_ever_made_from_this_repo: 0,
+            version: "0.2.0",
+            stage: "v0 — PARTIALLY verified",
+            // Not a boolean any more, and that is the honest shape. "verified:
+            // true" would be false and "verified: false" is now also false; the
+            // useful answer names which half.
+            field_paths_verified: "mod-and-file-core-fields-yes; dependency-edge-shape-no",
+            first_live_verification: "2026-08-18",
+            // Derived from the probe plan, not restated. Two hand-maintained lists
+            // of "what is still open" would eventually disagree, and the one in a
+            // diagnostics tool is the one a reader would believe.
+            unresolved_rows: openRows().map((row) => row.row),
             note:
-              "This client is v0 and the word 'verified' is gated (ADR-002 §13). Every field path it reads was " +
-              "taken from published schemas and NONE has been checked against a live CurseForge response. The " +
-              "sibling Nitrado repo corrected three wrong field paths the moment it made its first real call, " +
-              "in a repo whose fixtures were built the same careful way. Treat every null as possibly a wrong " +
-              "path rather than an absent value.",
+              `This client made its first authenticated calls on 2026-08-18 and every Mod and File path it ` +
+              `reads was confirmed present in live responses — none needed correcting. It is STILL v0, because ` +
+              `${openRows().length} rows of the register remain unconfirmed and one of them is not merely ` +
+              `unchecked but unobservable: the FileDependency edge shape was never seen (0 dependency edges in ` +
+              `1899 sampled ASA files), and neither the relationType nor the releaseType integer meanings are ` +
+              `published. Do not read a partially confirmed client as a verified one. The \`verification\` ` +
+              `block on any tool result carries the sample sizes.`,
             unverified_claims_register: "docs/adr/ADR-002-endpoint-allow-list.md §14.3, and the README table",
           },
           credential: {
@@ -113,7 +123,11 @@ export function diagnosticsTools(ctx: ToolContext): ToolDef[] {
           transport: {
             pinned_origin: PINNED_ORIGIN,
             chokepoint: "src/allowlist.ts — a closed allow-list of {method, path} pairs, matched jointly",
-            allowlist: ENDPOINT_ALLOWLIST.map((entry) => `${entry.id} ${entry.method} ${entry.shape}`),
+            // `shape` already carries the method. Concatenating entry.method as
+            // well printed "E1 GET GET /v1/games" in the first live run — caught
+            // by reading the output rather than by any test, which is its own
+            // small lesson about what a test suite over synthetic data can see.
+            allowlist: ENDPOINT_ALLOWLIST.map((entry) => `${entry.id} ${entry.shape}`),
             allowlist_size: ENDPOINT_ALLOWLIST.length,
             post_capable_tools: POST_CAPABLE_TOOLS,
             refused_by_design: [
@@ -143,8 +157,14 @@ export function diagnosticsTools(ctx: ToolContext): ToolDef[] {
                 : "These are the raw headers as received, unparsed. CurseForge documents no rate limit, so " +
                   "parsing them into a {limit, remaining} shape would assert a contract nobody here has " +
                   "observed.",
+            measured_2026_08_18:
+              "A live GET and a live POST were inspected header by header. CurseForge returned NO rate-limit " +
+              "header of any name — the full response header set was transport and CDN only (content-type, " +
+              "date, vary, via, x-amz-cf-id, x-amz-cf-pop, x-cache, x-cf-ver). So `observed: null` is not a " +
+              "gap in this client's header matching; there is nothing being sent. It remains NOT a claim that " +
+              "no limit exists: an unadvertised limit is still a limit, and the self-imposed pacing stays.",
           },
-          unverified: V0_NOTE,
+          verification: verificationBlock(),
         };
       },
     },

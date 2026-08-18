@@ -2,7 +2,7 @@ import { z } from "zod";
 import { MAX_PAGE_SIZE } from "../allowlist.js";
 import { asArray } from "../coerce.js";
 import type { ToolDef } from "../registry.js";
-import { pageBlock, shapeMod, V0_NOTE, type ToolContext } from "./context.js";
+import { pageBlock, shapeMod, verificationBlock, type ToolContext } from "./context.js";
 
 /**
  * `search_mods` — E2, GET /v1/mods/search.
@@ -107,7 +107,7 @@ export function searchTools(ctx: ToolContext): ToolDef[] {
           result_count_on_this_page: mods.length,
           mods: mods.map(shapeMod),
           ...pageBlock(page),
-          unverified: V0_NOTE,
+          verification: verificationBlock(),
         };
       },
     },

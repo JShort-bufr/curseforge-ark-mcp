@@ -31,14 +31,15 @@ async function main(): Promise<void> {
   // is a process that will not start, not a diff that works.
   assertAllToolsAreReadOnly(tools);
 
-  const server = new McpServer({ name: "curseforge-ark-mcp", version: "0.1.0" });
+  const server = new McpServer({ name: "curseforge-ark-mcp", version: "0.2.0" });
   const report = registerTools(server, tools);
 
   // stdout is the MCP transport. All human-facing output goes to stderr.
   // `v0` is in the startup line on purpose: it is the honest headline, and the
   // one thing a reader of a log should not have to go looking for.
   console.error(
-    `[curseforge-ark-mcp] v0 (field paths UNVERIFIED) tools=${report.registered.length} ` +
+    `[curseforge-ark-mcp] v0.2 (Mod/File paths confirmed 2026-08-18; dependency-edge shape and both ` +
+      `enum meanings still unconfirmed) tools=${report.registered.length} ` +
       `endpoints=${ENDPOINT_ALLOWLIST.length} writes=0 ` +
       (envSources.envFileLoaded ? `env=${envSources.envFilePath}` : "env=process.env"),
   );

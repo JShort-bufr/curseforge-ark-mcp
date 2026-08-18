@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { POST_CAPABLE_TOOLS } from "../src/allowlist.js";
 import { CurseForgeError } from "../src/errors.js";
 import { assertAllToolsAreReadOnly, type TieredTool } from "../src/registry.js";
-import { PROBE_PLAN } from "../src/probe-plan.js";
+import { openRows, PROBE_PLAN } from "../src/probe-plan.js";
 import { allTools, V1_TOOL_NAMES } from "../src/tools/index.js";
 import { makeContext, repoRoot, standardRoutes } from "./fixtures.js";
 
@@ -163,5 +163,45 @@ describe("§13.5 — the smoke probe plan covers every unverified row", () => {
   test("U6 and U7 say plainly that observation alone cannot settle them", () => {
     const u6 = PROBE_PLAN.find((step) => step.row === "U6");
     assert.match(String(u6?.probe), /never label them|cannot/);
+  });
+});
+
+describe("§13.5 — the probe plan is also a status board (amended 2026-08-18)", () => {
+  test("every row carries a status and a finding, and the four known-open rows are marked open", () => {
+    for (const step of PROBE_PLAN) {
+      assert.ok(step.finding.length > 20, `${step.row} has no finding recorded`);
+      assert.ok(step.status === "RESOLVED" || step.status === "STILL OPEN", `${step.row} has no status`);
+    }
+    assert.deepEqual(
+      openRows().map((step) => step.row),
+      ["U5", "U6", "U7", "U10"],
+      "these are the rows live measurement did not close; changing this set is a documentation act",
+    );
+  });
+
+  test("the diagnostics tool's open-row list agrees with the probe plan", async () => {
+    // Two places state which rows are open. They must not be able to disagree —
+    // that is the same class of drift the offering-count gate exists for next door.
+    const { ctx } = makeContext(standardRoutes());
+    const tool = allTools(ctx).find((candidate) => candidate.name === "get_api_diagnostics");
+    assert.ok(tool);
+    const result = (await tool.handler({})) as Record<string, unknown>;
+    const posture = result["version_posture"] as Record<string, unknown>;
+    assert.deepEqual(posture["unresolved_rows"], openRows().map((step) => step.row));
+  });
+
+  test("no resolved row claims a value it did not observe", () => {
+    // U6 and U7 in particular must not have acquired a mapping by tidying.
+    const u6 = PROBE_PLAN.find((step) => step.row === "U6");
+    const u7 = PROBE_PLAN.find((step) => step.row === "U7");
+    assert.equal(u6?.status, "STILL OPEN");
+    assert.equal(u7?.status, "STILL OPEN");
+    for (const label of ["release", "beta", "alpha", "required", "optional", "incompatible"]) {
+      assert.equal(
+        new RegExp(`= *${label}|${label} *=`).test(String(u6?.finding) + String(u7?.finding)),
+        false,
+        `${label} appears to have been assigned a numeric meaning`,
+      );
+    }
   });
 });

@@ -14,20 +14,32 @@ import { CurseForgeError } from "./errors.js";
  * available failure mode — the model gets a confident "no mods found" — and a
  * hardcoded constant is exactly how you get it.
  *
- * NEITHER THE ID NOR THE SLUG COULD BE CHECKED (§14.3 U1, U2). GET /v1/games
- * returns "all games that are available to the provided API key", and "a private
- * game is only accessible by its respective API key" — so both the ASA gameId
- * and whether ASA is visible to this key AT ALL are unresolvable until a key
- * exists. If ASA turns out not to be visible to the granted key, that is a
- * v1-blocking discovery for the board, not something to work around here.
+ * RESOLVED LIVE 2026-08-18 (§14.3 U1, U2 — both closed):
+ *
+ *   gameId  83374
+ *   slug    "ark-survival-ascended"   (the first candidate below, correct)
+ *   name    "ARK Survival Ascended"   (NOTE: no colon. An exact-match on
+ *                                      "ARK: Survival Ascended" would have failed)
+ *   38 games were visible to the key, and ASA was among them — so U2 is closed
+ *   and is NOT v1-blocking.
+ *
+ * THE ID IS STILL NOT HARDCODED. It appears above as a recorded observation and
+ * nowhere as code — there is a test that strips comments from every file in
+ * `src/` and asserts the literal appears in none of what is left. Knowing
+ * the value is not a reason to stop resolving it: the failure mode a hardcoded id
+ * produces is a clean, empty, entirely wrong search result set, and that failure
+ * is exactly as silent now that someone has written the number down as it was
+ * before. What the observation buys is confidence that the candidate list below
+ * is right — not permission to skip the lookup.
  */
 
 /**
  * Slug candidates, in order of preference.
  *
- * HYPOTHESES, every one. These are guesses at what CurseForge calls the game,
- * not observations. `CURSEFORGE_GAME_SLUG` exists so that the first person with
- * a key can correct this in configuration rather than in code.
+ * CONFIRMED 2026-08-18: the first entry is the slug CurseForge actually uses.
+ * "arksa" stays as a second candidate — it costs one string, it is what the
+ * sibling Nitrado repo's game slug is, and a vendor renaming a slug is a thing
+ * that happens.
  */
 export const ASA_SLUG_CANDIDATES: readonly string[] = ["ark-survival-ascended", "arksa"];
 
@@ -40,6 +52,10 @@ export const ASA_SLUG_CANDIDATES: readonly string[] = ["ark-survival-ascended", 
  * would also match ARK: Survival Evolved, which is a DIFFERENT GAME with a
  * different mod catalog, and quietly resolving to it would produce results that
  * look entirely plausible and are entirely wrong.
+ *
+ * Vindicated 2026-08-18 in a way worth recording: the live name is "ARK Survival
+ * Ascended", with NO COLON. A substring match survives that; the exact-match
+ * spelling a careful person would have written by hand would not have.
  */
 export const ASA_NAME_CANDIDATES: readonly string[] = ["survival ascended"];
 

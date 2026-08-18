@@ -3,25 +3,30 @@
 **A read-only MCP server for CurseForge mod curation, discovery, and update surveillance for
 ARK: Survival Ascended.**
 
-> ## THIS IS v0. NOTHING HERE HAS BEEN VERIFIED AGAINST A LIVE RESPONSE.
+> ## THIS IS STILL v0 — PARTIALLY VERIFIED, NOT VERIFIED.
 >
-> No CurseForge API key exists yet. The key is not self-service — it is granted by application
-> to Overwolf — so **no authenticated call has ever been made from this repo, by anyone, at any
-> point.** Every field path in every fixture and every tool output is a **hypothesis** read off a
-> published schema.
+> **What changed on 2026-08-18:** the CurseForge API key arrived, the client made its first
+> authenticated calls, and **every `Mod` and `File` field path it reads was confirmed present
+> in live responses. None needed correcting.** Sample: 748 distinct ARK: Survival Ascended
+> mods, 1899 file records.
 >
-> This is not modesty. The sibling repo `nitrado-ark-mcp` built its fixtures the same careful
-> way from documentation, and commit `5481c04` there corrected **three field paths that were
-> wrong until checked against live responses.** Assume this repo has three of its own waiting.
+> **Why it is still v0.** Four things remain unconfirmed, and one of them cannot be confirmed
+> by looking:
 >
-> The version number is `0.1.0` and it is a claim about verification status. There is **no
-> "Verified against the live account" section in this README**, and its absence is accurate
-> rather than an omission.
+> - The **`FileDependency` edge shape** has never been observed — 0 of 1899 sampled ASA files
+>   declared a dependency, with the `dependencies` array present and empty every time.
+> - The **`FileRelationType`** integers are unpublished *and* unexercised in this catalog.
+> - The **`FileReleaseType`** integers `1`, `2` and `3` have now been seen. Which one means
+>   release, beta or alpha is still unknown, and this server will not guess.
+> - Any **vendor cap** on bulk-read id arrays: none found up to 300 ids, so none is known.
+>
+> A partially verified client is not a verified one. The version number is a claim about
+> verification status, so it is `0.2.0` — not `1.0.0`, and deliberately not `1.0.0-anything`.
 
-What *is* verified today is this repo's own behaviour: the endpoint allow-list, the host pin,
-the path normalization, the pagination bounds, the envelope handling, and the three-state
-absent/empty/unknown discipline. All of it is tested against an injected fake `fetch`, with no
-key and no network. **146 tests, 0 failures** at the time of writing.
+This repo's own behaviour is verified independently of the API: the endpoint allow-list, the
+host pin, the path normalization, the pagination bounds, the envelope handling, and the
+three-state absent/empty/unknown discipline. All of it is tested against an injected fake
+`fetch`, with no key and no network. **156 tests, 0 failures** at the time of writing.
 
 Design record: [`docs/adr/ADR-002-endpoint-allow-list.md`](docs/adr/ADR-002-endpoint-allow-list.md)
 (status: PROPOSED). Every section reference below (§1, §4.3, §14.3 …) points into it.
@@ -130,27 +135,38 @@ proves nothing.
 
 ---
 
+## Verified against the live API — 2026-08-18
+
+Sample: **748 distinct ASA mods, 1899 file records**, drawn from deep search pages
+(index 1000-6000) and from every documented `sortField` 1-12, plus full file lists for 100 mods.
+Dated and sized on purpose: "verified" without a sample size is a mood, not a claim.
+
+| # | Claim | Result |
+| --- | --- | --- |
+| U1 | The ASA `gameId` | **`83374`**, slug `ark-survival-ascended`, name `ARK Survival Ascended` — **no colon**, which an exact-match spelling would have got wrong. Still resolved live on every start; a test asserts the number appears nowhere in `src/` outside a comment. |
+| U2 | Is ASA visible to the key? | **Yes.** 38 games visible, ASA among them. Not v1-blocking. |
+| U3 | `Mod` field paths | **All correct.** `id`, `gameId`, `name`, `slug`, `dateModified`, `links.websiteUrl`, `categories`, `allowModDistribution`, `latestFiles`, `latestFilesIndexes`. |
+| U4 | `File` field paths | **All correct.** `id`, `modId`, `displayName`, `fileName`, `fileDate`, `gameVersions`, `sortableGameVersions`, `dependencies`, `releaseType`, `isAvailable`. |
+| U8 | `pagination` presence | Present on the paginated endpoints (games, search, files), absent on single-record and bulk reads — which is exactly the split this client was built to expect. |
+| U9 | Do ASA mods populate the optional fields? | `latestFiles`, `latestFilesIndexes`, `sortableGameVersions`, `gameVersions`: **300/300**. `dependencies`: present on 100%, non-empty on **0%**. |
+| U11 | Rate-limit headers | **CurseForge sends none.** Full header enumeration on a live GET and POST found transport/CDN headers only. So `null` is not a matching bug in this client — but it is **not** a claim that no limit exists, and the self-imposed pacing stays. |
+| U12 | Pagination past index 0 | Works; `totalCount` stable at 6848 across pages. **But** past the end of a result set CurseForge returns `resultCount: 0` *and* `totalCount: 0` — `totalCount` describes the response, not the query. Tool output now says "past the end" rather than letting that read as "found nothing". |
+| U13 | Base URL | Correct. The host pin is sound. |
+
+**No field path needed correcting.** That is recorded as an outcome rather than a boast: the
+sibling repo's commit `5481c04` fixed three wrong paths the day it first called live, and that
+precedent is the reason each path here was checked one at a time instead of trusted.
+
 ## Still unverified
 
-**Every row below is a HYPOTHESIS.** These are §14.3 of ADR-002, reproduced in full. Field paths
-are read off published schemas, which is exactly the artifact class that produced three wrong
-paths in the sibling repo.
+Shrunk, not vanished. These are the rows that survived contact with the live API.
 
-| # | Claim | Basis | Why it matters |
+| # | Claim | Status | Why it is still open |
 | --- | --- | --- | --- |
-| **U1** | The ASA `gameId` value | **Undiscoverable without the key** (§5) | A wrong value returns clean, empty, wrong search results |
-| **U2** | Whether ASA is visible to the granted key at all | Undiscoverable without the key | Could block v1 entirely |
-| **U3** | `Mod` fields: `id`, `gameId`, `name`, `slug`, `latestFiles`, `latestFilesIndexes`, `dateModified`, `links`, `categories`, `allowModDistribution` | Published schema | Every tool output |
-| **U4** | `File` fields: `id`, `modId`, `displayName`, `fileName`, `fileDate`, `gameVersions`, `sortableGameVersions`, `dependencies`, `releaseType`, `isAvailable` | Published schema | `get_latest_file`, `list_mod_files` |
-| **U5** | `FileDependency` = `{ modId, relationType }` | Published schema | `resolve_mod_dependencies` traversal |
-| **U6** | **The `FileRelationType` numeric enum mapping** | **NOT RESOLVED.** Three attempts against the docs; the page shows `relationType` as a bare integer with no published value table. Do **not** take a mapping from memory, from a blog, or from this repo. | Determines whether an edge is required, optional, a tool, or incompatible — i.e. whether it is followed at all. **`resolve_mod_dependencies` blocks on this.** |
-| **U7** | The `FileReleaseType` numeric enum (release/beta/alpha) | Not resolved from the docs page. **Partial corroboration only:** the Upload API uses the *names* `alpha`, `beta`, `release` — which supports the set, **not** the numeric mapping in the read API. | `get_latest_file` filtering; treating alpha as release is a wrong update recommendation |
-| **U8** | Whether `pagination` is present on every paginated endpoint | Documented shape; never observed | This client errors rather than assuming one page |
-| **U9** | Whether ASA mods actually populate `dependencies`, `sortableGameVersions`, `latestFilesIndexes` | Schema says they can; ASA-specific behaviour unknown | An always-empty field is a capability gap, not a bug — and the three-state rule requires telling them apart |
-| **U10** | Any id-count cap on `POST /v1/mods` / `POST /v1/mods/files` bodies | **Not documented.** The 200-id cap in this client is **ours**, not the vendor's | Chunking strategy |
-| **U11** | CurseForge rate limits | **Undocumented.** No published figure found | `get_api_diagnostics` reports observed headers or `null`, never a guess |
-| **U12** | Real pagination behaviour past `index` 0, and behaviour at the 10000 ceiling | Documented constraint only | The truncation disclosure in §4.3 |
-| **U13** | Base URL `https://api.curseforge.com` | Documentation-derived | The host pin depends on it |
+| **U5** | `FileDependency` = `{ modId, relationType }` | **Unobserved** | Not shown wrong — *never seen*. No ASA file in the sample declared a dependency, so no edge object has ever been inspected. The shape is documentation-derived and the test fixture is the only place it exists. |
+| **U6** | The **`FileRelationType`** numeric enum | **Unpublished AND unobservable here** | `dependencies` was present-and-empty on all 1899 files across 748 mods, so no relation integer has ever appeared. ADR-002 predicted this and named the consequence: the unmapped-integer traversal is **the answer, not a stopgap**. Practical effect: for ASA, `resolve_mod_dependencies` returns single-node trees, and it now says so in its own output so an empty tree does not read as a failure. |
+| **U7** | The **`FileReleaseType`** numeric enum | **Values seen, meanings unknown** | Observed: `1` (1893 files), `2` (3), `3` (3). At least three members, consistent with the Upload API's alpha/beta/release trio — and no evidence at all about which integer is which. A frequency distribution is not a value table. Inferring `1 = release` because 1 is commonest is the guess this repo exists to refuse. |
+| **U10** | Vendor cap on bulk-read id arrays | **No cap found up to 300** | 200 distinct ids returned 200 records; 300 returned 300. So the cap, if any, is above 300. The 200-id cap in this client stays: it is ours, deliberately conservative against an undocumented rate limit, and a probe that found no ceiling has not found the ceiling. |
 
 ### Two consequences you will see in tool output
 
@@ -160,6 +176,10 @@ either, and a wrong label would produce a dependency list — or an update recom
 wrong in a way nobody would check. `resolve_mod_dependencies` therefore follows **every** edge
 and says so: it **over-collects**, and its output states that plainly. A wide net is at least
 visibly wide.
+
+For ASA specifically, the live catalog makes that moot in a way worth knowing before you use the
+tool: **no sampled ASA mod declares any dependency at all.** A single-node tree is the expected
+result, not a symptom of a broken traversal, and the tool's output says which one it is.
 
 **`get_latest_file` requires you to say what "latest" means.** Newest by `fileDate`, newest
 matching a game version, and newest with a given `releaseType` give *different answers*, and a
@@ -189,18 +209,14 @@ Node 20+ (developed on 22). No build step to configure; `npm test` builds first.
 
 ```bash
 npm install
-npm test          # builds, then runs the suite — no key, no network
+npm test          # builds, then runs the suite — no key, no network, nothing live
 npm run typecheck
-npm run smoke     # refuses cleanly until a key exists, naming what it would probe
+npm run smoke     # LIVE once a key is configured; refuses cleanly and probes nothing without one
 ```
 
-Then, once you have a key:
-
-```bash
-cp .env.example .env
-# set CURSEFORGE_API_KEY, then:
-npm run smoke
-```
+`npm run smoke` is the falsification run, not a health check. With a key it walks the §14.3
+register row by row and prints what it observed; without one it names every probe it would have
+made and exits 0 having sent nothing. The test suite never touches the network in either case.
 
 MCP client configuration (stdio):
 
@@ -291,9 +307,9 @@ src/
   scrub.ts        never echo the key. That is the whole module.
   probe-plan.ts   one probe per unverified row, asserted complete by a test
   server.ts       stdio entry point
-  smoke.ts        the key-arrival command
+  smoke.ts        the falsification run (live with a key, plan-only without)
   tools/          the seven tools
-test/             146 tests; fixtures are synthetic in content, structural in shape
+test/             156 tests; fixtures are synthetic in content, structural in shape
 scripts/          buildinfo generator, test enumerator
 ```
 

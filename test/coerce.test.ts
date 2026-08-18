@@ -92,3 +92,40 @@ describe("§4.3 / §3 — the completeness sentence", () => {
     assert.equal(describeCompleteness(null), null);
   });
 });
+
+describe("2026-08-18 live finding — paging past the end", () => {
+  /**
+   * Observed: at index 9950 on a 6848-result query, CurseForge returned
+   * resultCount 0 AND totalCount 0. `totalCount` is a property of the RESPONSE,
+   * not of the query. Without this branch the descriptor would read
+   * total_count 0 / has_more false, which a model would take as "this search
+   * found nothing" rather than "you walked off the end".
+   */
+  test("index > 0 with zero results says PAST THE END, and warns that totalCount 0 is not the query's total", () => {
+    const note = describeCompleteness({
+      index: 9_950,
+      page_size: 50,
+      result_count: 0,
+      total_count: 0,
+      has_more: false,
+      tail_unreachable: false,
+    });
+    assert.match(String(note), /PAST THE END OF THE RESULT SET/);
+    assert.match(String(note), /property of THIS response/);
+    assert.match(String(note), /Do NOT read this as "the search found nothing"/);
+  });
+
+  test("PREIMAGE: a zero-result FIRST page is still the ordinary 'none matched' answer, with no such warning", () => {
+    // index 0 with 0 results is a real empty search (§6) and must not be dressed
+    // up as a paging accident.
+    const note = describeCompleteness({
+      index: 0,
+      page_size: 50,
+      result_count: 0,
+      total_count: 0,
+      has_more: false,
+      tail_unreachable: false,
+    });
+    assert.equal(note, null);
+  });
+});

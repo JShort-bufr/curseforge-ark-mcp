@@ -3,7 +3,7 @@ import { MAX_PAGE_SIZE } from "../allowlist.js";
 import { asArray } from "../coerce.js";
 import { CurseForgeError } from "../errors.js";
 import type { ToolDef } from "../registry.js";
-import { pageBlock, shapeFile, shapeMod, V0_NOTE, type ToolContext } from "./context.js";
+import { pageBlock, shapeFile, shapeMod, verificationBlock, type ToolContext } from "./context.js";
 
 const modIdParam = z
   .number()
@@ -35,7 +35,7 @@ export function modTools(ctx: ToolContext): ToolDef[] {
           // null on a single-record endpoint is NORMAL and is not synthesised
           // into a one-page descriptor (§3).
           pagination: page,
-          unverified: V0_NOTE,
+          verification: verificationBlock(),
         };
       },
     },
@@ -98,7 +98,7 @@ export function modTools(ctx: ToolContext): ToolDef[] {
           file_count_on_this_page: files.length,
           files: files.map(shapeFile),
           ...pageBlock(page),
-          unverified: V0_NOTE,
+          verification: verificationBlock(),
         };
       },
     },
@@ -132,7 +132,7 @@ export function modTools(ctx: ToolContext): ToolDef[] {
             "No download URL is available from this server by design. GET /v1/mods/{modId}/files/{fileId}/" +
             "download-url is a documented read on the pinned host and is still refused, because it is not on " +
             "the endpoint allow-list (ADR-002 §1.7). Nitrado installs mods itself.",
-          unverified: V0_NOTE,
+          verification: verificationBlock(),
         };
       },
     },

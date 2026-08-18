@@ -23,7 +23,7 @@ import { CurseForgeClient } from "./client.js";
 import { bootstrapEnv, loadConfig } from "./config.js";
 import { CurseForgeError } from "./errors.js";
 import { createGameResolver } from "./game.js";
-import { PROBE_PLAN } from "./probe-plan.js";
+import { openRows, PROBE_PLAN } from "./probe-plan.js";
 import { allTools } from "./tools/index.js";
 
 const NO_KEY_BANNER = [
@@ -43,13 +43,19 @@ const NO_KEY_BANNER = [
   "       MCP client's env block, which takes precedence).",
   "    3. Run `npm run smoke` again.",
   "",
-  "  What it will probe when it can, and which unverified claim each probe",
-  "  settles (ADR-002 §14.3):",
+  "  Every probe, its ADR-002 §14.3 row, and where that row stands after the",
+  "  2026-08-18 run. Nine rows are closed; the four marked STILL OPEN are what a",
+  "  fresh key would be used to attack:",
   "",
 ].join("\n");
 
 function renderPlan(): string {
-  return PROBE_PLAN.map((step) => `    ${step.row.padEnd(4)} ${step.claim}\n         probe: ${step.probe}`).join("\n");
+  return PROBE_PLAN.map(
+    (step) =>
+      `    ${step.row.padEnd(4)} [${step.status}] ${step.claim}\n` +
+      `         probe:   ${step.probe}\n` +
+      `         finding: ${step.finding}`,
+  ).join("\n");
 }
 
 /**
@@ -167,10 +173,15 @@ async function main(): Promise<void> {
   >;
   console.log(assertNoSecrets("resolve_mod_dependencies", tree, config.apiKey));
 
+  const open = openRows();
   console.log(
-    "\nSmoke completed. NOTHING IS 'VERIFIED' UNTIL A HUMAN READS THE ABOVE AGAINST ADR-002 §14.3 AND AMENDS " +
-      "IT. Rows U6 and U7 in particular cannot be settled by observation alone: this run can enumerate the " +
-      "integers it saw, and no number of observations makes an unpublished enum table known.",
+    `\nSmoke completed. NOTHING BECOMES 'VERIFIED' UNTIL A HUMAN READS THE ABOVE AGAINST ADR-002 §14.3 AND ` +
+      `AMENDS IT IN PLACE, dated and attributed (§13.5). As of the last amendment, ${open.length} row(s) are ` +
+      `still open: ${open.map((step) => step.row).join(", ")}.\n` +
+      `\nU6 and U7 cannot be settled by observation alone, and that is not a gap in effort: this run can ` +
+      `enumerate the integers it saw, and no number of observations makes an unpublished enum table known. ` +
+      `U5 and U6 are further blocked by the catalog itself — no sampled ASA file declares any dependency, so ` +
+      `there is no edge to inspect. If this run finally turns one up, that is the finding worth reporting.`,
   );
 }
 

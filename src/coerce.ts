@@ -94,6 +94,22 @@ export function describeCompleteness(page: PageDescriptor | null): string | null
     );
   }
 
+  // OBSERVED LIVE 2026-08-18, and it is the one pagination behaviour the ADR did
+  // not anticipate: at an index past the end of a result set, CurseForge returns
+  // resultCount 0 AND totalCount 0 — even though the same query at index 0
+  // reported 6848. So `totalCount` is a property of the RESPONSE, not of the
+  // query, and a model paging forward would otherwise read "total_count: 0" as
+  // "this search has no results" rather than "you have walked off the end".
+  if (page.result_count === 0 && (page.index ?? 0) > 0) {
+    return (
+      `THIS PAGE IS PAST THE END OF THE RESULT SET. index ${String(page.index)} returned zero results. Note ` +
+      `that totalCount in this response is ${String(page.total_count)}, which is a property of THIS response ` +
+      `and not of the query: CurseForge reports totalCount 0 once the index exceeds the available results, ` +
+      `even when the same search at index 0 reports thousands. Do NOT read this as "the search found nothing" ` +
+      `— re-read the first page for the real total.`
+    );
+  }
+
   if (page.has_more === true) {
     return (
       `More results exist beyond this page: index ${String(page.index)} + resultCount ` +

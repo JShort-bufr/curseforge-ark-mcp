@@ -6,8 +6,11 @@ import { createGameResolver } from "../src/game.js";
 import { MAX_DEPTH, MAX_NODES } from "../src/tools/dependencies.js";
 import { allTools } from "../src/tools/index.js";
 import type { ToolDef } from "../src/registry.js";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import {
   FAKE_DEEP_MOD_ID,
+  FAKE_DOWNLOAD_URL_MARKER,
   FAKE_DEP_MOD_ID,
   FAKE_FILE_ID,
   FAKE_GAME_ID,
@@ -25,6 +28,7 @@ import {
   modRecord,
   pagination,
   readPath,
+  repoRoot,
   standardRoutes,
   testConfig,
   type StubRoute,
@@ -39,6 +43,21 @@ import {
  * hypotheses (§13), so the suite proves this client handles the shape it was
  * written for and nothing whatever about what CurseForge sends.
  */
+
+/** Every .ts under src/, resolved from the repo root because tests run from dist/test. */
+function srcFiles(): string[] {
+  const out: string[] = [];
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const child = join(dir, entry.name);
+      if (entry.isDirectory()) walk(child);
+      else if (entry.name.endsWith(".ts")) out.push(readFileSync(child, "utf8"));
+    }
+  };
+  walk(join(repoRoot(), "src"));
+  assert.ok(out.length >= 10, `preimage: expected the src tree, got ${out.length} file(s)`);
+  return out;
+}
 
 async function callTool(name: string, args: Record<string, unknown> = {}, routes: StubRoute[] = standardRoutes()) {
   const { ctx, calls } = makeContext(routes);
@@ -79,7 +98,12 @@ describe("§14.3 U3/U4/U5 — field paths, preimage-gated", () => {
     assert.equal(mod["allow_mod_distribution"], true);
     assert.equal((mod["latest_files"] as unknown[]).length, 1);
     assert.ok(Array.isArray(mod["latest_files_indexes"]));
-    assert.match(String(mod["unverified"]), /UNVERIFIED/, "every record carries the v0 caveat");
+    assert.match(String(mod["field_paths"]), /confirmed against live responses 2026-08-18/);
+    assert.match(
+      String(mod["field_paths"]),
+      /Still unconfirmed/,
+      "the caveat must survive partial verification — some rows resolved, not all",
+    );
   });
 
   test("get_mod_file reads the File paths, and says there is no download URL", async () => {
@@ -540,12 +564,20 @@ describe("resolve_mod_dependencies — one POST per LEVEL, not one GET per node"
 // ---------------------------------------------------------------------------
 
 describe("get_api_diagnostics — the honest-status tool", () => {
-  test("it reports the v0 posture rather than implying health", async () => {
+  test("it reports a PARTIALLY verified posture — neither 'verified' nor 'nothing checked'", async () => {
     const { result } = await callTool("get_api_diagnostics");
     const posture = result["version_posture"] as Record<string, unknown>;
-    assert.equal(posture["stage"], "v0");
-    assert.equal(posture["field_paths_verified"], false);
-    assert.equal(posture["live_calls_ever_made_from_this_repo"], 0);
+    assert.match(String(posture["stage"]), /PARTIALLY verified/);
+    assert.equal(posture["first_live_verification"], "2026-08-18");
+    // A boolean would be a lie in both directions now, so it must not be one.
+    assert.notEqual(posture["field_paths_verified"], true);
+    assert.notEqual(posture["field_paths_verified"], false);
+    assert.deepEqual(posture["unresolved_rows"], ["U5", "U6", "U7", "U10"]);
+    assert.equal(
+      JSON.stringify(result).includes("No authenticated CurseForge call has ever been made"),
+      false,
+      "that claim became false on 2026-08-18 and must not survive anywhere in tool output",
+    );
   });
 
   test("it never reports the key, a prefix of it, or its LENGTH", async () => {
@@ -567,6 +599,10 @@ describe("get_api_diagnostics — the honest-status tool", () => {
     assert.ok("commit" in build && "dirty" in build);
     const transport = result["transport"] as Record<string, unknown>;
     assert.equal(transport["allowlist_size"], 7);
+    // The first live run printed "E1 GET GET /v1/games" — the method twice.
+    for (const entry of transport["allowlist"] as string[]) {
+      assert.equal(/(GET|POST).*(GET|POST)/.test(entry), false, `method printed twice: ${entry}`);
+    }
     assert.deepEqual(transport["post_capable_tools"], ["resolve_mod_dependencies"]);
     assert.match(JSON.stringify(transport["refused_by_design"]), /download-url/);
     assert.match(JSON.stringify(transport["refused_by_design"]), /Nitrado/);
@@ -596,5 +632,103 @@ describe("get_api_diagnostics — the honest-status tool", () => {
     assert.equal(rate["observed"], null);
     assert.match(String(rate["note"]), /Absent is not zero/);
     assert.match(String(rate["note"]), /NOT a claim that there is no/);
+    // The live measurement is recorded, and it still does not become "no limit".
+    assert.match(String(rate["measured_2026_08_18"]), /NO rate-limit header of any name/);
+    assert.match(String(rate["measured_2026_08_18"]), /NOT a claim that\s+no limit exists/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// DEC-002 §11.3 — no download URL, and the endpoint exclusion is not enough
+// ---------------------------------------------------------------------------
+
+describe("§11.3 — a download URL must never reach a tool result", () => {
+  /**
+   * Discovered live 2026-08-18: a real File record carries a populated
+   * `downloadUrl`. Keeping the download-url ENDPOINT off the allow-list (§1.7)
+   * therefore does NOT deliver "no download or install" on its own — the URL
+   * arrives inside records fetched from endpoints that ARE allowed, and the
+   * shapers dropping it is the other half of the control.
+   *
+   * Preimage first, per the house rule: the fixture must actually contain the URL,
+   * or the assertion that it was dropped passes against nothing.
+   */
+  test("PREIMAGE: the File fixture DOES carry a populated downloadUrl", () => {
+    const fixture = fileRecord() as Record<string, unknown>;
+    assert.equal(typeof fixture["downloadUrl"], "string");
+    assert.match(String(fixture["downloadUrl"]), new RegExp(FAKE_DOWNLOAD_URL_MARKER));
+  });
+
+  test("get_mod_file does not surface it", async () => {
+    const { result } = await callTool("get_mod_file", { mod_id: FAKE_MOD_ID, file_id: FAKE_FILE_ID });
+    const rendered = JSON.stringify(result);
+    assert.equal(rendered.includes(FAKE_DOWNLOAD_URL_MARKER), false);
+    assert.equal(/download_url"\s*:/.test(rendered), false, "and no renamed passthrough either");
+  });
+
+  test("list_mod_files does not surface it", async () => {
+    const { result } = await callTool("list_mod_files", { mod_id: FAKE_MOD_ID });
+    assert.equal(JSON.stringify(result).includes(FAKE_DOWNLOAD_URL_MARKER), false);
+  });
+
+  test("search_mods does not surface it through the nested latestFiles", async () => {
+    const { result } = await callTool("search_mods", {});
+    assert.equal(JSON.stringify(result).includes(FAKE_DOWNLOAD_URL_MARKER), false);
+  });
+
+  test("get_latest_file does not surface it", async () => {
+    const { result } = await callTool("get_latest_file", {
+      mod_id: FAKE_MOD_ID,
+      selection: "newest_by_file_date",
+    });
+    assert.equal(JSON.stringify(result).includes(FAKE_DOWNLOAD_URL_MARKER), false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Live findings that deserve a standing test
+// ---------------------------------------------------------------------------
+
+describe("2026-08-18 live findings, pinned", () => {
+  test("the ASA gameId is recorded in prose but NEVER hardcoded as code", () => {
+    // Knowing the value is not permission to stop resolving it (§5): a wrong
+    // hardcoded id returns a clean, empty, entirely wrong result set, and that
+    // failure is exactly as silent now that someone has written the number down.
+    //
+    // Comments are stripped first, so the control is "no executable literal"
+    // rather than "the number is unmentionable in prose" — recording an
+    // observation in a docstring is the opposite of burying an assumption in code.
+    const stripComments = (text: string): string =>
+      text.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
+
+    let sawItInProse = false;
+    for (const text of srcFiles()) {
+      if (/\b83374\b/.test(text)) sawItInProse = true;
+      assert.equal(
+        /\b83374\b/.test(stripComments(text)),
+        false,
+        "the gameId must never appear outside a comment in src/",
+      );
+    }
+    assert.ok(sawItInProse, "preimage: the stripper must be running over text that DOES contain the number");
+  });
+
+  test("resolve_mod_dependencies reports the empty-tree finding rather than looking broken", async () => {
+    const { result } = await callTool("resolve_mod_dependencies", { mod_ids: [FAKE_MOD_ID] });
+    assert.match(String(result["asa_catalog_observation"]), /ZERO/);
+    assert.match(String(result["asa_catalog_observation"]), /1899 file records/);
+    assert.match(
+      String(result["asa_catalog_observation"]),
+      /not 'the traversal broke'/,
+      "an empty tree for ASA is the expected answer and must read as one",
+    );
+  });
+
+  test("the releaseType note records the observed integers WITHOUT mapping them", async () => {
+    const { result } = await callTool("get_mod_file", { mod_id: FAKE_MOD_ID, file_id: FAKE_FILE_ID });
+    const note = String((result["file"] as Record<string, unknown>)["release_type_note"]);
+    assert.match(note, /1 \(1893 files\), 2 \(3\) and 3 \(3\)/, "the distribution is evidence for whoever resolves U7");
+    assert.match(note, /a frequency distribution is not a value table/);
+    assert.match(note, /NOT mapped/);
   });
 });

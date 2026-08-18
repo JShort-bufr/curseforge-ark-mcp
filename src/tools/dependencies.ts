@@ -3,7 +3,7 @@ import { MAX_BULK_IDS } from "../allowlist.js";
 import { asArray, asNumber, asString, at } from "../coerce.js";
 import { CurseForgeError } from "../errors.js";
 import type { ToolDef } from "../registry.js";
-import { RELATION_TYPE_NOTE, shapeDependencies, V0_NOTE, type ToolContext, type DependencyEdge } from "./context.js";
+import { RELATION_TYPE_NOTE, shapeDependencies, verificationBlock, type ToolContext, type DependencyEdge } from "./context.js";
 
 /**
  * `resolve_mod_dependencies` — the ONLY tool that may issue a POST (ADR-002 §8),
@@ -257,12 +257,19 @@ export function dependencyTools(ctx: ToolContext): ToolDef[] {
           nodes,
           seed_ids_not_returned_by_curseforge: unresolved,
           relation_type_note: RELATION_TYPE_NOTE,
+          asa_catalog_observation:
+            "MEASURED 2026-08-18: across 1899 file records from 748 distinct ARK: Survival Ascended mods, ZERO " +
+            "declared any dependency — the `dependencies` array was present and empty every single time. So for " +
+            "ASA specifically, a single-node tree is the EXPECTED result of this tool and not a sign it failed. " +
+            "If you get an empty tree, the likely reading is 'this mod declares no dependencies on CurseForge', " +
+            "not 'the traversal broke'. It also means the raw relationType integer has never actually been " +
+            "observed, so the edge shape below is still documentation-derived (ADR-002 §14.3 U5/U6).",
           over_collection_warning:
             "This tree follows every dependency edge, including ones that are probably optional or tool " +
             "relationships. Do NOT read it as a list of requirements. Resolving that needs the " +
             "FileRelationType value table, which CurseForge does not publish (ADR-002 §14.3 U6) and which this " +
             "server refuses to guess.",
-          unverified: V0_NOTE,
+          verification: verificationBlock(),
         };
       },
     },
