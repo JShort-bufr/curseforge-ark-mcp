@@ -1,0 +1,10 @@
+# Credentials. Never commit. See ADR-002 §2.
+.env
+.env.*
+!.env.example
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
