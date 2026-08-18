@@ -1,0 +1,31 @@
+{
+  "name": "curseforge-ark-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Read-only MCP server for CurseForge mod curation and update surveillance for ARK: Survival Ascended. v0 — no field path has been checked against a live response.",
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "bin": {
+    "curseforge-ark-mcp": "dist/src/server.js"
+  },
+  "scripts": {
+    "buildinfo": "node scripts/generate-buildinfo.mjs",
+    "prebuild": "npm run buildinfo",
+    "pretypecheck": "npm run buildinfo",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && node scripts/run-tests.mjs",
+    "start": "node dist/src/server.js",
+    "smoke": "npm run build && node dist/src/smoke.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.1",
+    "typescript": "5.9.3"
+  }
+}

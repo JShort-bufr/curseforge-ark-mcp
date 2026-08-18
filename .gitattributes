@@ -1,0 +1,7 @@
+# Normalize to LF in the index on a Windows checkout. Byte-derived checks
+# (hashes, --check style gates, snapshot tests) false-fail when the worktree is
+# CRLF and the blob is LF. Pin text handling here so that never starts.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.gz binary
