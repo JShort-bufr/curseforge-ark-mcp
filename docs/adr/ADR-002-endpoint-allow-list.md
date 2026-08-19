@@ -2,8 +2,17 @@
 
 ## Status
 
-**Proposed.** Not accepted. Acceptance is a separate reviewed act and nothing in this
-document should be read as authorising code beyond the scaffold it specifies.
+**ACCEPTED 2026-08-18, with known-open residuals.** Not a verified catalog. Version stays
+0.x. The word "verified" does not apply to this acceptance.
+
+Control register (living; bounded wording, not stronger):
+
+| Row | Claim bound |
+| --- | --- |
+| **U5** | FileDependency `{ modId, relationType }` — **unobserved**. 0 of 1899 sampled ASA files declared a dependency. Not shown wrong. |
+| **U6** | FileRelationType — unpublished **and** unobservable in this catalog. Unmapped-integer traversal is the answer, not a stopgap. |
+| **U7** | FileReleaseType integers `1`/`2`/`3` **seen**; meanings **unknown**. Never mapped. |
+| **U10** | No vendor bulk-id cap **found up to 300**. That is not "no cap exists." Client cap stays 200. |
 
 - **Date:** 2026-08-18
 - **Repository of record:** `curseforge-ark-mcp` (this repo, created this session)
@@ -16,6 +25,17 @@ document should be read as authorising code beyond the scaffold it specifies.
   (`nitrado-ark-mcp`, ACCEPTED 2026-08-17) is a different repo and a different transport;
   the shared sequence records that the two are one line of reasoning, not that they share
   a codebase. They share nothing at runtime — see §9.
+
+**AMENDMENT 3 — 2026-08-18, `office-backend-engineer`.** Founder granted execute after a
+live `get_api_diagnostics` from the Cursor stdio MCP. Status flips to ACCEPTED with the
+Control register above. Phase 0's exit criterion is met. This still does not claim the
+catalog is verified.
+
+**AMENDMENT 2 — 2026-08-18, `office-backend-engineer`.** Founder closed open question 2:
+`get_latest_file` defaults to `newest_by_file_date`. The other two `selection` variants
+remain; U7 is still unmapped; every answer still restates the ordering used and whether
+the default was applied. This does not accept the ADR and does not claim the catalog is
+verified.
 
 **AMENDMENT 1 — 2026-08-18, `office-backend-engineer`.** Amended in place per §13.5 rather
 than appended as a second version. The key arrived and phase 6 ran. What changed:
@@ -41,10 +61,16 @@ than appended as a second version. The key arrived and phase 6 ran. What changed
 > authenticated call has been made from this repo. There is no live measurement anywhere in
 > this ADR, and §14 is the register of exactly which claims are which.~~
 
-**What holds acceptance open now.** The key exists and the catalog answers. Four rows of
-§14.3 remain open, and one of them (U6) is unobservable in the ASA catalog rather than merely
-unchecked — so the unmapped-integer behaviour in §7.2 is now the settled answer rather than a
-stopgap. Acceptance remains a separate reviewed act.
+**What held acceptance open after Amendment 1:**
+
+> ~~The key exists and the catalog answers. Four rows of §14.3 remain open, and one of them
+> (U6) is unobservable in the ASA catalog rather than merely unchecked — so the
+> unmapped-integer behaviour in §7.2 is now the settled answer rather than a stopgap.
+> Acceptance remains a separate reviewed act.~~
+
+**What acceptance does not claim.** Those four rows remain OPEN on the Control register.
+Accepting this ADR accepts the allow-list, the seven tools, and the honesty rules. It does
+not close U5, U6, U7, or U10, and it does not make the word "verified" available.
 
 ---
 
@@ -445,8 +471,9 @@ E4 when the mod record does not carry a usable candidate. Two design constraints
 - **"Latest" must be defined in the tool's own output, not assumed.** *Latest by
   `fileDate`? Latest matching a game version? Latest with `releaseType` = release rather
   than alpha?* These give different answers, and a mod-update decision made on the wrong one
-  is exactly the "confident wrong answer" class. The tool states which ordering it used and
-  what it filtered on, every time.
+  is exactly the "confident wrong answer" class. **Default (founder, 2026-08-18): newest by
+  `fileDate`.** The other two variants remain. The tool states which ordering it used, whether
+  the default was applied, and what it filtered on, every time.
 - **`releaseType` and `sortableGameVersions` are documentation-derived field paths**, and
   the numeric meaning of `releaseType` is unverified (§14.3). The tool must degrade honestly
   — if it cannot determine release type, it says so and returns the candidate rather than
@@ -883,13 +910,12 @@ they were foreseen rather than missed.
 1. **U6 is a hard block on dependency-type filtering.** Ship the traversal with the raw
    integer surfaced and unmapped, per §7.2. Do not invent a mapping to make the output look
    finished.
-2. **`get_latest_file` needs a defined ordering, and the definition is a product decision.**
-   Newest by `fileDate`, newest matching the server's game version, or newest with
-   `releaseType` = release? The tool must state which it used (§7.1). If the founder's actual
-   question is *"is my server behind?"*, the game-version filter is probably load-bearing and
-   probably needs the version string — which this server does not have and must not fetch
-   from Nitrado (§9). **Likely answer: it becomes a required tool parameter.** Confirm before
-   building.
+2. **`get_latest_file` ordering — SETTLED 2026-08-18.** Default is `newest_by_file_date`.
+   Newest matching a game version, and newest with a given `releaseType` integer, remain as
+   explicit `selection` variants. The tool still states which it used (§7.1). Game-version
+   filtering still requires the caller to supply the version string — this server does not
+   have it and must not fetch it from Nitrado (§9). U7 remains unmapped: there is still no
+   named release/beta/alpha filter.
 3. **Does `search_mods` need `classId`?** ASA may organise mods under a class/section that
    makes unclassed search noisy. `GET /v1/categories` is deferred (§1.7), so the answer is
    unknown until the key arrives. Do not add the entry pre-emptively.
@@ -919,7 +945,7 @@ key** — which is the entire reason the board judged v1 buildable now.
 
 | Phase | Work | Owner | Exit criterion | Key needed |
 | --- | --- | --- | --- | --- |
-| **0** | This ADR reviewed and accepted. | `office-architect` → reviewer | Status flips to ACCEPTED, or amendments applied | No |
+| **0** | This ADR reviewed and accepted. **Done 2026-08-18.** | `office-architect` → reviewer | Status flipped to ACCEPTED with known-open residuals — not verified | No |
 | **1** | Repo scaffold: `package.json`, `tsconfig`, `src/`, `tests/`, `.env.example`, `buildinfo` generator. | Backend | `npm test` runs; `buildinfo` stamps commit + dirty flag | No |
 | **2** | `CurseForgeClient`: allow-list (§1), host pin, normalization, `x-api-key` attach, refuse-to-start (§2), envelope unwrap (§3), pagination bounds (§4). **No tool yet.** | Backend | **§1.8's nine tests pass, with the preimage test first.** Test 5 (`download-url` refused) is the acceptance test for "allow-list, not method check" | No |
 | **3** | `gameId` capability detection (§5); three-state coercion (§6); boot tier assertion (§11); key scrub (§12.1). | Backend | Deliberate tier-2 registration prevents startup; unresolvable `gameId` fails loudly | No |

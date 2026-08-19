@@ -12,21 +12,17 @@ import { RELEASE_TYPE_NOTE, shapeFile, verificationBlock, type ToolContext } fro
  * one my server is running?"
  *
  * ---------------------------------------------------------------------------
- * "Latest" IS AN UNRESOLVED PRODUCT DECISION, so it is a REQUIRED PARAMETER
+ * "Latest" default: `newest_by_file_date` (founder, 2026-08-18)
  * ---------------------------------------------------------------------------
  *
- * Newest by `fileDate`, newest matching a game version, and newest with
- * `releaseType` = release give DIFFERENT ANSWERS, and a mod-update decision made
- * on the wrong one is the "confident wrong answer" class this whole repo is
- * arranged against. ADR-002 open question 2 flags the definition as a product
- * decision that was still open at build time, and its own guess at the answer is
- * "it becomes a required tool parameter".
+ * Newest by `fileDate`, newest matching a game version, and newest with a given
+ * `releaseType` integer still give DIFFERENT ANSWERS. ADR-002 open question 2
+ * left the definition as a product decision; the founder settled it: default to
+ * newest by `fileDate`. The other two variants remain, with no silent mapping of
+ * U7's release-type integers.
  *
- * So nothing is silently picked. `selection` has no default, the caller must
- * state which question it is asking, and the answer restates the ordering it
- * used and what it filtered on EVERY TIME. When the founder settles the
- * definition, that is a small change here — a default, or one fewer variant —
- * rather than a rewrite.
+ * A default is not a silent pick. The answer still restates the ordering it used,
+ * what it filtered on, and whether the default was applied, EVERY TIME.
  *
  * The third variant is the awkward one and it is awkward honestly:
  * `newest_with_release_type` cannot be spelled "newest stable release", because
@@ -37,6 +33,31 @@ import { RELEASE_TYPE_NOTE, shapeFile, verificationBlock, type ToolContext } fro
  */
 
 type Selection = "newest_by_file_date" | "newest_matching_game_version" | "newest_with_release_type";
+
+const DEFAULT_SELECTION: Selection = "newest_by_file_date";
+
+function isSelection(value: unknown): value is Selection {
+  return (
+    value === "newest_by_file_date" ||
+    value === "newest_matching_game_version" ||
+    value === "newest_with_release_type"
+  );
+}
+
+function resolveSelection(raw: unknown): { selection: Selection; defaultApplied: boolean } {
+  if (raw === undefined) {
+    return { selection: DEFAULT_SELECTION, defaultApplied: true };
+  }
+  if (isSelection(raw)) {
+    return { selection: raw, defaultApplied: false };
+  }
+  throw new CurseForgeError(
+    "ARGUMENT_REFUSED",
+    `selection must be one of newest_by_file_date, newest_matching_game_version, newest_with_release_type. ` +
+      `Got ${JSON.stringify(raw)}.`,
+    { detail: { selection: raw } },
+  );
+}
 
 interface Candidate {
   file: unknown;
@@ -69,23 +90,22 @@ export function latestFileTools(ctx: ToolContext): ToolDef[] {
       title: "Get a mod's newest file, by a stated definition of newest",
       tier: 1,
       description:
-        "Answers 'is there a newer file for this mod than the one I am running?' — and REQUIRES you to say " +
-        "what 'newest' means, because the candidate definitions give different answers and picking one " +
-        "silently is how a wrong update recommendation gets made. selection is required: " +
-        "'newest_by_file_date' orders by fileDate; 'newest_matching_game_version' restricts to files " +
-        "declaring a game version and then orders by fileDate; 'newest_with_release_type' restricts to a " +
-        "releaseType INTEGER you supply and then orders by fileDate. There is no named release/beta/alpha " +
-        "filter because CurseForge publishes no value table for that integer (ADR-002 §14.3 U7) and this " +
-        "server will not invent one. Every answer restates the ordering used, the filter applied, how many " +
-        "candidates were considered, and where the candidates came from. Read-only. v0: all field paths " +
-        "unverified.",
+        "Answers 'is there a newer file for this mod than the one I am running?' Default selection is " +
+        "'newest_by_file_date' (founder decision 2026-08-18). The other definitions still give different " +
+        "answers: 'newest_matching_game_version' restricts to files declaring a game version and then " +
+        "orders by fileDate; 'newest_with_release_type' restricts to a releaseType INTEGER you supply and " +
+        "then orders by fileDate. There is no named release/beta/alpha filter because CurseForge publishes " +
+        "no value table for that integer (ADR-002 §14.3 U7) and this server will not invent one. Every " +
+        "answer restates the ordering used, whether the default was applied, the filter applied, how many " +
+        "candidates were considered, and where the candidates came from. Read-only.",
       inputSchema: {
         mod_id: z.number().int().nonnegative().describe("CurseForge numeric mod (project) id."),
         selection: z
           .enum(["newest_by_file_date", "newest_matching_game_version", "newest_with_release_type"])
+          .default(DEFAULT_SELECTION)
           .describe(
-            "REQUIRED, no default. Which question you are asking. These give different answers and this " +
-              "server will not choose for you.",
+            "Which question you are asking. Defaults to newest_by_file_date. These give different answers; " +
+              "pass another variant only when that is the question you mean.",
           ),
         game_version: z
           .string()
@@ -108,7 +128,7 @@ export function latestFileTools(ctx: ToolContext): ToolDef[] {
       },
       handler: async (args) => {
         const modId = args["mod_id"] as number;
-        const selection = args["selection"] as Selection;
+        const { selection, defaultApplied } = resolveSelection(args["selection"]);
         const gameVersion = args["game_version"] as string | undefined;
         const releaseType = args["release_type"] as number | undefined;
 
@@ -168,6 +188,7 @@ export function latestFileTools(ctx: ToolContext): ToolDef[] {
         const commonEcho = {
           requested_mod_id: modId,
           selection,
+          selection_default_applied: defaultApplied,
           ordering_field: "fileDate",
           filter_applied: describeFilter(selection, gameVersion, releaseType),
           candidate_source: source,
@@ -248,6 +269,12 @@ function applyFilter(
       return pool.filter((candidate) => candidate.gameVersions.includes(gameVersion as string));
     case "newest_with_release_type":
       return pool.filter((candidate) => candidate.releaseTypeRaw === releaseType);
+    default: {
+      const _exhaustive: never = selection;
+      throw new CurseForgeError("ARGUMENT_REFUSED", `unhandled selection ${JSON.stringify(_exhaustive)}`, {
+        detail: { selection: _exhaustive },
+      });
+    }
   }
 }
 
@@ -266,5 +293,9 @@ function describeFilter(selection: Selection, gameVersion: string | undefined, r
         `releaseType must equal the raw integer ${String(releaseType)}, then ordered by fileDate descending. ` +
         `That integer's meaning is YOUR claim, not this server's: no value table is published (U7).`
       );
+    default: {
+      const _exhaustive: never = selection;
+      return _exhaustive;
+    }
   }
 }

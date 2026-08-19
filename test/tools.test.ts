@@ -226,10 +226,10 @@ describe("search_mods", () => {
 });
 
 // ---------------------------------------------------------------------------
-// get_latest_file — the unresolved product decision, parameterized
+// get_latest_file — founder default is newest_by_file_date; variants remain
 // ---------------------------------------------------------------------------
 
-describe("get_latest_file — 'latest' is a REQUIRED, stated choice", () => {
+describe("get_latest_file — 'latest' defaults to newest_by_file_date", () => {
   const older = fileRecord({ id: FAKE_OLDER_FILE_ID, fileDate: "2026-01-01T00:00:00Z" });
   const newerAlt = fileRecord({
     id: 555_002,
@@ -251,21 +251,34 @@ describe("get_latest_file — 'latest' is a REQUIRED, stated choice", () => {
     },
   ];
 
-  test("selection is a required parameter with no default", async () => {
-    const { tool } = await callTool("get_mod", { mod_id: FAKE_MOD_ID });
-    void tool;
+  test("omitted selection defaults to newest_by_file_date and says so", async () => {
     const { ctx } = makeContext(threeFileRoutes());
     const latest = allTools(ctx).find((candidate) => candidate.name === "get_latest_file");
     assert.ok(latest);
     assert.ok(Object.keys(latest.inputSchema).includes("selection"));
-    // Zod is the enforcement path in the MCP server; assert the schema itself
-    // rejects an absent value rather than trusting the description.
     const schema = latest.inputSchema["selection"] as unknown as {
-      safeParse: (value: unknown) => { success: boolean };
+      safeParse: (value: unknown) => { success: boolean; data?: unknown };
     };
-    assert.equal(schema.safeParse(undefined).success, false, "no default: the caller must state which question");
+    const omitted = schema.safeParse(undefined);
+    assert.equal(omitted.success, true, "founder default: omitted selection is newest_by_file_date");
+    assert.equal(omitted.data, "newest_by_file_date");
     assert.equal(schema.safeParse("newest_by_file_date").success, true);
     assert.equal(schema.safeParse("newest").success, false);
+
+    const { result } = await callTool("get_latest_file", { mod_id: FAKE_MOD_ID }, threeFileRoutes());
+    assert.equal(result["selection"], "newest_by_file_date");
+    assert.equal(result["selection_default_applied"], true);
+    assert.equal((result["latest_file"] as Record<string, unknown>)["id"], 555_002);
+  });
+
+  test("an explicit selection is not reported as the default", async () => {
+    const { result } = await callTool(
+      "get_latest_file",
+      { mod_id: FAKE_MOD_ID, selection: "newest_by_file_date" },
+      threeFileRoutes(),
+    );
+    assert.equal(result["selection"], "newest_by_file_date");
+    assert.equal(result["selection_default_applied"], false);
   });
 
   test("the three selections give DIFFERENT answers over the same three files", async () => {
@@ -290,8 +303,8 @@ describe("get_latest_file — 'latest' is a REQUIRED, stated choice", () => {
     );
     assert.equal((byRelease.result["latest_file"] as Record<string, unknown>)["id"], FAKE_FILE_ID);
 
-    // The whole point of the required parameter: these are three answers, and a
-    // server that picked one silently would have been right at most once.
+    // The whole point of keeping the variants: these are three answers, and a
+    // server that only had the default would have been right at most once.
     assert.notEqual(
       (byDate.result["latest_file"] as Record<string, unknown>)["id"],
       (byVersion.result["latest_file"] as Record<string, unknown>)["id"],
@@ -305,6 +318,7 @@ describe("get_latest_file — 'latest' is a REQUIRED, stated choice", () => {
       threeFileRoutes(),
     );
     assert.equal(result["selection"], "newest_by_file_date");
+    assert.equal(result["selection_default_applied"], false);
     assert.equal(result["ordering_field"], "fileDate");
     assert.equal(result["candidates_before_filter"], 3);
     assert.equal(result["candidates_after_filter"], 3);

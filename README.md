@@ -26,10 +26,11 @@ ARK: Survival Ascended.**
 This repo's own behaviour is verified independently of the API: the endpoint allow-list, the
 host pin, the path normalization, the pagination bounds, the envelope handling, and the
 three-state absent/empty/unknown discipline. All of it is tested against an injected fake
-`fetch`, with no key and no network. **156 tests, 0 failures** at the time of writing.
+`fetch`, with no key and no network. **160 tests, 0 failures** at the time of writing.
 
 Design record: [`docs/adr/ADR-002-endpoint-allow-list.md`](docs/adr/ADR-002-endpoint-allow-list.md)
-(status: PROPOSED). Every section reference below (§1, §4.3, §14.3 …) points into it.
+(status: **ACCEPTED 2026-08-18, with known-open residuals** — not a verified catalog).
+Every section reference below (§1, §4.3, §14.3 …) points into it.
 
 ---
 
@@ -181,25 +182,27 @@ For ASA specifically, the live catalog makes that moot in a way worth knowing be
 tool: **no sampled ASA mod declares any dependency at all.** A single-node tree is the expected
 result, not a symptom of a broken traversal, and the tool's output says which one it is.
 
-**`get_latest_file` requires you to say what "latest" means.** Newest by `fileDate`, newest
-matching a game version, and newest with a given `releaseType` give *different answers*, and a
-mod-update decision made on the wrong one is exactly the confident-wrong-answer class this repo
-is arranged against. `selection` has **no default**:
+**`get_latest_file` defaults to newest by `fileDate`.** Newest by `fileDate`, newest
+matching a game version, and newest with a given `releaseType` still give *different
+answers*, and a mod-update decision made on the wrong one is exactly the
+confident-wrong-answer class this repo is arranged against. The founder settled the
+default on 2026-08-18: omit `selection` and you get `newest_by_file_date`. The other two
+variants remain. Every answer restates the ordering it used, whether the default was
+applied, what it filtered on, how many candidates it considered, and where the candidates
+came from.
 
 | `selection` | Also requires | Means |
 | --- | --- | --- |
-| `newest_by_file_date` | — | Newest of all candidate files, by `fileDate` |
+| `newest_by_file_date` | — | **Default.** Newest of all candidate files, by `fileDate` |
 | `newest_matching_game_version` | `game_version` | Newest file declaring that game version |
 | `newest_with_release_type` | `release_type` (a raw **integer**) | Newest file carrying that release-type integer |
 
 There is no named `release`/`beta`/`alpha` filter, because U7 is unresolved and this server will
 not invent the mapping. You pass the integer you mean.
 
-**This definition is an OPEN PRODUCT QUESTION.** ADR-002's open question 2 flags it as a
-founder decision that had not been made when this was built, so the tool is parameterized rather
-than opinionated: when the answer arrives it becomes a default, or one fewer variant — a small
-change rather than a rewrite. Every answer restates the ordering it used, what it filtered on,
-how many candidates it considered, and where the candidates came from.
+ADR-002 open question 2 is closed as a product decision, not as a verification claim. The
+tool is still parameterized: the default is one of three stated questions, not a rewrite
+that deletes the other two.
 
 ---
 
@@ -218,19 +221,25 @@ npm run smoke     # LIVE once a key is configured; refuses cleanly and probes no
 register row by row and prints what it observed; without one it names every probe it would have
 made and exits 0 having sent nothing. The test suite never touches the network in either case.
 
-MCP client configuration (stdio):
+MCP client configuration (stdio). First-use on this machine is the Cursor user
+`mcp.json` entry `curseforge-ark`. It launches `dist/src/server.js` and does **not**
+put the key in that file: the server loads gitignored `.env` itself (process.env
+still wins if an MCP client supplies the variable). Duplicating the key into
+`mcp.json` is a second copy of a non-transferable credential.
 
 ```json
 {
   "mcpServers": {
     "curseforge-ark": {
       "command": "node",
-      "args": ["C:/path/to/curseforge-ark-mcp/dist/src/server.js"],
-      "env": { "CURSEFORGE_API_KEY": "your-key" }
+      "args": ["C:/Users/jdsho/CursorProjects/curseforge-ark-mcp/dist/src/server.js"]
     }
   }
 }
 ```
+
+Disable / rollback: remove the `curseforge-ark` entry from the MCP client config.
+This server is first-party stdio, not a Runlayer-managed catalog server.
 
 **The server refuses to start without a key**, naming both locations it searched, the exact
 variable, and the fact that the key is not self-service. A stdio MCP server that starts cleanly
