@@ -52,11 +52,11 @@ async function assertRefusedBeforeDispatch(
 }
 
 // ---------------------------------------------------------------------------
-// TEST 1 — THE PREIMAGE. Each of E1-E7 is dispatched.
+// TEST 1 — THE PREIMAGE. Each of E1-E8 is dispatched.
 // ---------------------------------------------------------------------------
 
-describe("§1.8 test 1 — the preimage: all seven entries DO dispatch", () => {
-  test("E1..E7 each reach fetch, against the SHIPPED allow-list", async () => {
+describe("§1.8 test 1 — the preimage: all eight entries DO dispatch", () => {
+  test("E1..E8 each reach fetch, against the SHIPPED allow-list", async () => {
     const { client, calls } = testClient(standardRoutes());
 
     await client.request({ path: "v1/games", tool: "get_api_diagnostics" });
@@ -76,8 +76,9 @@ describe("§1.8 test 1 — the preimage: all seven entries DO dispatch", () => {
       body: { fileIds: [FAKE_FILE_ID] },
       tool: "resolve_mod_dependencies",
     });
+    await client.request({ path: "v1/categories", query: { gameId: 1 }, tool: "list_categories" });
 
-    assert.equal(calls.length, 7, "all seven entries must be dispatchable, or every refusal below is vacuous");
+    assert.equal(calls.length, 8, "all eight entries must be dispatchable, or every refusal below is vacuous");
     assert.equal(calls.filter((call) => call.method === "POST").length, 2, "exactly two entries carry POST");
     for (const call of calls) {
       assert.ok(call.url.startsWith(PINNED_ORIGIN), `dispatched to an unexpected origin: ${call.url}`);
@@ -377,7 +378,7 @@ describe("§1.6 — id segments bind to [0-9]+, not [^/]+", () => {
     assert.equal(matchEndpoint("GET", "v1/mods/1/files/2/3"), null);
   });
 
-  test("the list is exactly the seven entries the ADR names, and nothing has been added quietly", () => {
+  test("the list is exactly the eight entries the ADR names, and nothing has been added quietly", () => {
     assert.deepEqual(
       ENDPOINT_ALLOWLIST.map((entry) => `${entry.id} ${entry.method} ${entry.pattern.source}`),
       // `RegExp.prototype.source` escapes forward slashes, so these are the
@@ -390,6 +391,7 @@ describe("§1.6 — id segments bind to [0-9]+, not [^/]+", () => {
         String.raw`E5 GET ^v1\/mods\/[0-9]+\/files\/[0-9]+$`,
         String.raw`E6 POST ^v1\/mods$`,
         String.raw`E7 POST ^v1\/mods\/files$`,
+        String.raw`E8 GET ^v1\/categories$`,
       ],
     );
   });

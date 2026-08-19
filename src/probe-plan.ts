@@ -93,7 +93,9 @@ export const PROBE_PLAN: readonly ProbeStep[] = [
     claim: "Whether pagination is present on every paginated endpoint",
     probe: "GET /v1/games and /v1/mods/search — the client already errors if it is absent",
     status: "RESOLVED",
-    finding: "Present on E1/E2/E4; absent on E3/E5/E6/E7 (they return {data} only). The client's split is correct as built.",
+    finding:
+      "Present on E1/E2/E4; absent on E3/E5/E6/E7 (they return {data} only). E8 GET /v1/categories confirmed " +
+      "live 2026-08-19: pagination null on both the full list and classes_only. The client's split is correct.",
   },
   {
     row: "U9",

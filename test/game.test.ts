@@ -103,7 +103,7 @@ describe("§5 — caching is process-lifetime and per-resolver, not a module sin
   test("concurrent resolves share ONE in-flight request", async () => {
     const { resolver, calls } = resolverFor([{ id: FAKE_GAME_ID, slug: FAKE_GAME_SLUG, name: FAKE_GAME_NAME }]);
     const [a, b, c] = await Promise.all([resolver.resolve(), resolver.resolve(), resolver.resolve()]);
-    assert.equal(calls.length, 1, "seven tools resolving on the first turn must not cost seven requests");
+    assert.equal(calls.length, 1, "all tools resolving on the first turn must not cost one request each");
     assert.equal(a.game_id, b.game_id);
     assert.equal(b.game_id, c.game_id);
   });

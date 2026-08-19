@@ -26,6 +26,43 @@ Control register (living; bounded wording, not stronger):
   the shared sequence records that the two are one line of reasoning, not that they share
   a codebase. They share nothing at runtime — see §9.
 
+**AMENDMENT 5 — 2026-08-19, founder.** Two decisions:
+
+1. **Screening cut.** Un-defer `GET /v1/categories` as **E8**. Add `list_categories`.
+   `search_mods` now accepts `class_id`, `category_id` / `category_ids` (include, sent to
+   CurseForge) and `exclude_category_ids` (local; the vendor has no exclude parameter).
+   Pagination still describes the unfiltered upstream page when exclude is used. Class and
+   category ids are discovered at runtime, never hardcoded. Open question 3 is settled.
+   The tool surface is **eight** tier-1 tools. Download-url stays refused.
+   Live 2026-08-19: E8 returns `{data}` only (`pagination` null). ASA has one
+   class (Mods); Custom Cosmetics is a named category under it. Those ids are
+   discovered via `list_categories`, never hardcoded in `src/`.
+
+2. **Collaboration, not merger, before embodiment.** Embodiment is an in-game player
+   agent — a character on the founder's Steam account that actually plays ASA with
+   autonomy — not a combined MCP UI. These two servers are catalog and install
+   infrastructure for that later goal. CurseForge MCP finds and screens. Nitrado MCP
+   installs (`active-mods`, still queued as DEC-002 A6). The model holds both today.
+   Neither server holds the other's credential (Ruling 1 / §9). Search returns a
+   `handoff` block of `curseforge_mod_ids` so that join is explicit. This amendment
+   does not start the player agent, does not write Nitrado, and does not build a UI.
+
+**AMENDMENT 4 — 2026-08-19, founder-driven.** Ranking by popularity recommended Admin
+Panel (`929868`) as a gameplay pick. Live record: `status` 4, `isAvailable` true, summary
+"Admin Panel Tool", `allowModDistribution` false — the same shape as currently updated
+content packs. What distinguished it: four remaining files named `* 98.zip`, dated
+2025-11-06, `fileLength` 6888 bytes. Real ASA packs in the same sample were megabytes to
+hundreds of megabytes. The API does not say "removed"; the published file list does.
+`allowModDistribution` false is common on popular ASA mods and is not that signal.
+
+Shapers now keep `summary` (plain text, bounded), `status` (raw integer, unmapped),
+`dateCreated` / `dateReleased`, `authors`, mod-level `isAvailable`, and `fileLength`.
+Search, get_mod, list_mod_files, get_mod_file, and get_latest_file carry a `curation_note`
+stating a catalog row is not an install recommendation. `downloadUrl` is still dropped.
+The HTML description endpoint is still off the allow-list. Download/install remains
+refused (DEC-002 §11.3) until a new board record says otherwise. This does not reopen
+U5–U7 or U10.
+
 **AMENDMENT 3 — 2026-08-18, `office-backend-engineer`.** Founder granted execute after a
 live `get_api_diagnostics` from the Cursor stdio MCP. Status flips to ACCEPTED with the
 Control register above. Phase 0's exit criterion is met. This still does not claim the
@@ -69,7 +106,8 @@ than appended as a second version. The key arrived and phase 6 ran. What changed
 > Acceptance remains a separate reviewed act.~~
 
 **What acceptance does not claim.** Those four rows remain OPEN on the Control register.
-Accepting this ADR accepts the allow-list, the seven tools, and the honesty rules. It does
+Accepting this ADR accepts the allow-list, the tool surface (seven at acceptance; eight as
+of Amendment 5), and the honesty rules. It does
 not close U5, U6, U7, or U10, and it does not make the word "verified" available.
 
 ---
@@ -116,10 +154,16 @@ a mechanism rather than an intention.
 Recorded here because the boundary is an architectural constraint, not a preference — see
 §9 and §10 for the provisions.
 
-- `nitrado-ark-mcp` answers *"these project ids are in `active-mods`"*.
-- `curseforge-ark-mcp` answers *"project X's newest file is v2.1, published six hours ago"*.
-- **The model holds both.** Neither server calls the other. Neither server ever holds the
-  other's credential.
+- `nitrado-ark-mcp` answers *"these project ids are in `active-mods`"*. Writing that
+  setting is still queued (DEC-002 A6) and is a Nitrado restart.
+- `curseforge-ark-mcp` answers *"which ASA mods match, under which class/category, and
+  what is project X's newest file"*. Search returns `handoff.curseforge_mod_ids` so the
+  join is explicit rather than implied.
+- **The model holds both.** Neither server calls the other. Neither server ever holds
+  the other's credential (Ruling 1). Merging the processes or sharing `.env` remains
+  refused. A UI that called both would still only be orchestration. **Embodiment** is
+  a later in-game player agent (Steam account, autonomous ASA character). This ADR
+  does not start that.
 
 ---
 
@@ -282,10 +326,9 @@ because a future reader needs to know an omission was a choice:
 | --- | --- |
 | `GET /v1/mods/{modId}/files/{fileId}/download-url` | **Refused outright** by DEC-002 §11.3 — no download or install tool. Nitrado installs mods itself. |
 | `GET`/`POST` `/v1/fingerprints`, `/v1/fingerprints/fuzzy` | Deferred by DEC-002 §11.2. Fingerprinting needs local mod files this server never sees. |
-| `POST /v1/mods/featured` | Deferred. A read `POST`, and still not on the list — the list is scoped to what v1's seven tools need. |
-| `GET /v1/categories` | Deferred by DEC-002 §11.2 (categories / class taxonomy). |
+| `POST /v1/mods/featured` | Deferred. A read `POST`, and still not on the list — the list is scoped to what the current tools need. |
 | `GET /v1/games/{gameId}`, `/v1/games/{gameId}/versions`, `/v1/games/{gameId}/version-types` | Not needed; E1 is sufficient for §5. |
-| `GET /v1/mods/{modId}/description`, `.../changelog` | Not needed by v1's seven tools. Free-text HTML; see §12.3. |
+| `GET /v1/mods/{modId}/description`, `.../changelog` | Not needed by the current tools. Free-text HTML; see §12.3. |
 | `/v1/minecraft/*` | Wrong game. |
 
 #### 1.8 Testability — the hard requirement
@@ -325,7 +368,7 @@ can dispatch nothing passes perfectly and proves nothing.
 path, and do not "support both".
 
 - **Refuse to start without a key.** Ported from ADR-001's reasoning verbatim, because it
-  applies unchanged: *a stdio MCP server that starts cleanly and then throws on all seven
+  applies unchanged: *a stdio MCP server that starts cleanly and then throws on every
   tools is a miserable thing to debug.* The startup error must name **both locations
   checked** (the environment variable and the `.env` file), the exact variable name, and the
   fact that the key is obtained by application to Overwolf and is not self-service.
@@ -442,13 +485,15 @@ zero or an empty string.
 
 ---
 
-### 7. The v1 tool surface: exactly seven tools, all tier 1
+### 7. The v1 tool surface: eight tools, all tier 1
 
-Fixed by DEC-002 §11.1. Not expandable without a new board record.
+DEC-002 §11.1 started at seven. Amendment 5 (founder 2026-08-19) added `list_categories`
+so screening can name class/category ids. Still not expandable without a board record.
 
 | Tool | Endpoint(s) | Kind | Notes |
 | --- | --- | --- | --- |
-| `search_mods` | E2 `GET /v1/mods/search` | single-record GET, paginated | `gameId` from §5, never a parameter. §4 bounds apply. |
+| `search_mods` | E2 `GET /v1/mods/search` | GET, paginated | `gameId` from §5, never a parameter. `class_id` / `category_id` include; `exclude_category_ids` local. §4 bounds apply. |
+| `list_categories` | E8 `GET /v1/categories` | GET, not paginated per published schema | Discover class/category ids. Never hardcode them. |
 | `get_mod` | E3 `GET /v1/mods/{modId}` | single-record GET | |
 | `list_mod_files` | E4 `GET /v1/mods/{modId}/files` | GET, paginated | §4 bounds apply. |
 | `get_mod_file` | E5 `GET /v1/mods/{modId}/files/{fileId}` | single-record GET | |
@@ -456,7 +501,7 @@ Fixed by DEC-002 §11.1. Not expandable without a new board record.
 | `resolve_mod_dependencies` | **E6/E7 bulk POSTs** | bulk read | See §7.2. |
 | `get_api_diagnostics` | E1 `GET /v1/games` | single-record GET | See §7.3. |
 
-**All seven are tier 1.** The `tier` field on `ToolDef` is ported (DEC-002 §9.1) — and see
+**All eight are tier 1.** The `tier` field on `ToolDef` is ported (DEC-002 §9.1) — and see
 §11 for the one assertion that makes the field mean something without porting the sibling's
 tier-2/3 machinery.
 
@@ -896,9 +941,12 @@ now recorded rather than incidental, and there is a test whose fixture *contains
 records. A future contributor who "simplifies" a shaper into a passthrough would delete a
 board-level refusal without touching the allow-list that refusal is documented against.
 
-Also dropped by the shapers, for the lesser reason: `fileStatus`, `hashes`, `fileLength`,
-`downloadCount`, `fileSizeOnDisk`, `alternateFileId`, `isServerPack`, `fileFingerprint`,
-`modules`, `cookingInfo`; and on `Mod`: `screenshots`, `summary`, `status`, `downloadCount`.
+Also dropped by the shapers, for the lesser reason: `fileStatus`, `hashes`,
+`downloadCount`, `fileSizeOnDisk`, `alternateFileId`, `isServerPack`,
+`fileFingerprint`, `modules`, `cookingInfo`; and on `Mod`: `screenshots`,
+`downloadCount`. `summary`, `status`, and `fileLength` were on this list until
+Amendment 4 (2026-08-19): they are curation fields, not clutter. `downloadUrl`
+stays dropped.
 
 ---
 
@@ -916,9 +964,11 @@ they were foreseen rather than missed.
    filtering still requires the caller to supply the version string — this server does not
    have it and must not fetch it from Nitrado (§9). U7 remains unmapped: there is still no
    named release/beta/alpha filter.
-3. **Does `search_mods` need `classId`?** ASA may organise mods under a class/section that
-   makes unclassed search noisy. `GET /v1/categories` is deferred (§1.7), so the answer is
-   unknown until the key arrives. Do not add the entry pre-emptively.
+3. **Does `search_mods` need `classId`? SETTLED 2026-08-19.** Yes, as an optional
+   include, plus `category_id` / `category_ids`, with ids discovered via `list_categories`
+   (E8). `exclude_category_ids` is local because CurseForge documents no exclude
+   parameter; pagination still describes the upstream page. Do not hardcode ASA category
+   ids in `src/`.
 4. **Fixture provenance.** Fixtures must be **synthetic in content, structural in shape** —
    derive the structure from the published schema, synthesise the values, and assert the
    fixture's preimage is non-empty so a test cannot pass vacuously. This is the sibling

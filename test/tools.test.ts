@@ -5,10 +5,14 @@ import { CurseForgeError } from "../src/errors.js";
 import { createGameResolver } from "../src/game.js";
 import { MAX_DEPTH, MAX_NODES } from "../src/tools/dependencies.js";
 import { allTools } from "../src/tools/index.js";
+import { SUMMARY_MAX_CHARS } from "../src/tools/context.js";
 import type { ToolDef } from "../src/registry.js";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import {
+  FAKE_CLASS_ID,
+  FAKE_CATEGORY_ID,
+  FAKE_COSMETIC_CATEGORY_ID,
   FAKE_DEEP_MOD_ID,
   FAKE_DOWNLOAD_URL_MARKER,
   FAKE_DEP_MOD_ID,
@@ -21,8 +25,10 @@ import {
   FAKE_RELATION_TYPE,
   FAKE_RELEASE_TYPE,
   FILE_FIELD_PREIMAGE,
+  CATEGORY_FIELD_PREIMAGE,
   MOD_FIELD_PREIMAGE,
   fileRecord,
+  categoryRecord,
   jsonResponse,
   makeContext,
   modRecord,
@@ -35,7 +41,7 @@ import {
 } from "./fixtures.js";
 
 /**
- * The seven tools (ADR-002 §7), against an injected fake `fetch`.
+ * The eight tools (ADR-002 §7), against an injected fake `fetch`.
  *
  * FIELD-PATH TESTS ARE PREIMAGE-GATED. Each asserts first that the fixture
  * actually contains the path, then that the tool read it. Without the first half a
@@ -96,6 +102,19 @@ describe("§14.3 U3/U4/U5 — field paths, preimage-gated", () => {
     assert.equal(mod["slug"], "synthetic-structures-plus");
     assert.equal(mod["website_url"], "https://example.invalid/synthetic-mod");
     assert.equal(mod["allow_mod_distribution"], true);
+    assert.equal(mod["summary"], "Synthetic QoL structures for tests.");
+    assert.equal(mod["summary_truncated"], false);
+    assert.equal(mod["status_raw"], 4);
+    assert.equal(mod["date_created"], "2026-01-01T00:00:00Z");
+    assert.equal(mod["date_released"], "2026-08-10T12:00:00Z");
+    assert.equal(mod["is_available"], true);
+    assert.deepEqual(mod["authors"], [
+      { name: "SyntheticAuthor", url: "https://example.invalid/members/synthetic" },
+    ]);
+    const latest = (mod["latest_files"] as Record<string, unknown>[])[0];
+    assert.ok(latest);
+    assert.equal(latest["file_length_bytes"], 2_233_899);
+    assert.match(String(result["curation_note"]), /not an install recommendation/);
     assert.equal((mod["latest_files"] as unknown[]).length, 1);
     assert.ok(Array.isArray(mod["latest_files_indexes"]));
     assert.match(String(mod["field_paths"]), /confirmed against live responses 2026-08-18/);
@@ -115,6 +134,8 @@ describe("§14.3 U3/U4/U5 — field paths, preimage-gated", () => {
     assert.equal(file["file_name"], "synthetic-mod-2.1.zip");
     assert.equal(file["file_date"], "2026-08-10T12:00:00Z");
     assert.equal(file["is_available"], true);
+    assert.equal(file["file_length_bytes"], 2_233_899);
+    assert.match(String(result["curation_note"]), /file_length_bytes/);
     assert.deepEqual(file["game_versions"], [FAKE_GAME_VERSION]);
     assert.ok(Array.isArray(file["sortable_game_versions"]));
     assert.match(String(result["download_url_note"]), /not on the endpoint allow-list/);
@@ -131,6 +152,11 @@ describe("§14.3 U3/U4/U5 — field paths, preimage-gated", () => {
     assert.equal(mod["name"], null);
     assert.equal(mod["website_url"], null);
     assert.equal(mod["allow_mod_distribution"], null, "not false — absent is not 'distribution disallowed'");
+    assert.equal(mod["summary"], null);
+    assert.equal(mod["summary_truncated"], null);
+    assert.equal(mod["status_raw"], null);
+    assert.equal(mod["authors"], null, "not [] — absent is not 'no authors'");
+    assert.equal(mod["is_available"], null);
     assert.equal(mod["latest_files_indexes"], null, "not [] — absent is not 'no indexes'");
     assert.deepEqual(mod["latest_files"], [], "latestFiles absent yields no files to shape, which is a real []");
   });
@@ -163,6 +189,50 @@ describe("§14.3 U3/U4/U5 — field paths, preimage-gated", () => {
     ]);
     assert.deepEqual((empty["file"] as Record<string, unknown>)["dependencies"], []);
   });
+
+  test("a kilobyte-scale file still surfaces file_length_bytes and invents no 'removed' verdict", async () => {
+    const stub = {
+      ...fileRecord(),
+      fileName: "admin panel-windows 98.zip",
+      displayName: "admin panel-windows 98.zip",
+      fileLength: 6888,
+    };
+    const { result } = await callTool("get_mod", { mod_id: FAKE_MOD_ID }, [
+      {
+        match: /\/v1\/games/,
+        method: "GET",
+        body: { data: [{ id: FAKE_GAME_ID, slug: "ark-survival-ascended" }], pagination: pagination(1, 1) },
+      },
+      {
+        match: /\/v1\/mods\/\d+$/,
+        method: "GET",
+        body: { data: modRecord({ latestFiles: [stub], summary: "Admin Panel Tool", name: "Admin Panel" }) },
+      },
+    ]);
+    const latest = ((result["mod"] as Record<string, unknown>)["latest_files"] as Record<string, unknown>[])[0];
+    assert.ok(latest);
+    assert.equal(latest["file_length_bytes"], 6888);
+    assert.equal(latest["file_name"], "admin panel-windows 98.zip");
+    const rendered = JSON.stringify(result);
+    assert.equal(rendered.includes('"removed"'), false);
+    assert.equal(rendered.includes('"stub"'), false);
+    assert.match(String(result["curation_note"]), /does not guess that a small zip is a stub/);
+  });
+
+  test("a summary longer than SUMMARY_MAX_CHARS is truncated and flagged, not dropped", async () => {
+    const long = "x".repeat(SUMMARY_MAX_CHARS + 50);
+    const { result } = await callTool("get_mod", { mod_id: FAKE_MOD_ID }, [
+      {
+        match: /\/v1\/games/,
+        method: "GET",
+        body: { data: [{ id: FAKE_GAME_ID, slug: "ark-survival-ascended" }], pagination: pagination(1, 1) },
+      },
+      { match: /\/v1\/mods\/\d+$/, method: "GET", body: { data: modRecord({ summary: long }) } },
+    ]);
+    const mod = result["mod"] as Record<string, unknown>;
+    assert.equal(mod["summary_truncated"], true);
+    assert.equal(String(mod["summary"]).length, SUMMARY_MAX_CHARS);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -179,15 +249,76 @@ describe("search_mods", () => {
     const echo = result["query_echo"] as Record<string, unknown>;
     assert.equal(echo["game_id"], FAKE_GAME_ID);
     assert.equal(echo["game_resolved_by"], "candidate-slug");
+    assert.match(String(result["curation_note"]), /not an install recommendation/);
+    const handoff = result["handoff"] as Record<string, unknown>;
+    assert.deepEqual(handoff["curseforge_mod_ids"], [FAKE_MOD_ID]);
+    assert.equal(handoff["sibling"], "nitrado-ark-mcp");
   });
 
-  test("the tool exposes NO classId or categoryId parameter (§1.7, open question 3)", async () => {
+  test("gameId is not a parameter; class_id and category_id are", async () => {
     const { tool } = await callTool("search_mods", {});
     const params = Object.keys(tool.inputSchema);
-    assert.equal(params.includes("class_id"), false);
-    assert.equal(params.includes("category_id"), false);
     assert.equal(params.includes("game_id"), false, "gameId is resolved, never passed");
+    assert.ok(params.includes("class_id"));
+    assert.ok(params.includes("category_id"));
+    assert.ok(params.includes("exclude_category_ids"));
     assert.ok(params.includes("search_filter"), "preimage: the schema is not simply empty");
+  });
+
+  test("class_id is forwarded to CurseForge", async () => {
+    const { calls } = await callTool("search_mods", { class_id: FAKE_CLASS_ID });
+    const searchCall = calls.find((call) => call.url.includes("/v1/mods/search"));
+    assert.ok(searchCall);
+    assert.match(searchCall.url, new RegExp(`classId=${FAKE_CLASS_ID}`));
+  });
+
+  test("category_id and category_ids together are refused, not silently overridden", async () => {
+    const error = await callTool("search_mods", {
+      category_id: FAKE_CATEGORY_ID,
+      category_ids: [FAKE_CATEGORY_ID],
+    }).then(
+      () => null,
+      (caught: unknown) => caught,
+    );
+    assert.ok(error instanceof CurseForgeError);
+    assert.equal(error.code, "ARGUMENT_REFUSED");
+    assert.match(error.message, /not both/);
+  });
+
+  test("exclude_category_ids drops matching hits locally and does not send exclude upstream", async () => {
+    const kept = modRecord({ id: FAKE_MOD_ID, categories: [{ id: FAKE_CATEGORY_ID, name: "General" }] });
+    const dropped = modRecord({
+      id: FAKE_DEP_MOD_ID,
+      name: "Synthetic Skins",
+      categories: [{ id: FAKE_COSMETIC_CATEGORY_ID, name: "Custom Cosmetics" }],
+    });
+    const { result, calls } = await callTool(
+      "search_mods",
+      { exclude_category_ids: [FAKE_COSMETIC_CATEGORY_ID] },
+      [
+        {
+          match: /\/v1\/games/,
+          method: "GET",
+          body: { data: [{ id: FAKE_GAME_ID, slug: "ark-survival-ascended" }], pagination: pagination(1, 1) },
+        },
+        {
+          match: /\/v1\/mods\/search/,
+          method: "GET",
+          body: { data: [kept, dropped], pagination: pagination(2, 2) },
+        },
+      ],
+    );
+    const searchCall = calls.find((call) => call.url.includes("/v1/mods/search"));
+    assert.ok(searchCall);
+    assert.equal(searchCall.url.includes("exclude"), false);
+    assert.equal(result["upstream_result_count_on_this_page"], 2);
+    assert.equal(result["dropped_on_this_page_by_exclude"], 1);
+    assert.equal(result["result_count_on_this_page"], 1);
+    const mods = result["mods"] as Array<Record<string, unknown>>;
+    assert.equal(mods.length, 1);
+    assert.equal(mods[0]?.["id"], FAKE_MOD_ID);
+    assert.match(String(result["exclude_note"]), /AFTER CurseForge returned this page/);
+    assert.deepEqual((result["handoff"] as Record<string, unknown>)["curseforge_mod_ids"], [FAKE_MOD_ID]);
   });
 
   test("an empty result echoes the query so 'none matched' is legible as an ANSWER", async () => {
@@ -222,6 +353,36 @@ describe("search_mods", () => {
     ]);
     assert.equal(result["more_results_exist"], true);
     assert.match(String(result["completeness_note"]), /More results exist/);
+  });
+});
+
+describe("list_categories", () => {
+  test("PREIMAGE: the Category fixture contains every path the shaper reads", () => {
+    const fixture = categoryRecord();
+    assert.ok(CATEGORY_FIELD_PREIMAGE.length >= 8);
+    for (const path of CATEGORY_FIELD_PREIMAGE) {
+      assert.notEqual(readPath(fixture, path), undefined, `fixture is missing ${path}`);
+    }
+  });
+
+  test("gameId is resolved and sent; class ids are not hardcoded", async () => {
+    const { result, calls } = await callTool("list_categories", {});
+    const catCall = calls.find((call) => call.url.includes("/v1/categories"));
+    assert.ok(catCall);
+    assert.match(catCall.url, new RegExp(`gameId=${FAKE_GAME_ID}`));
+    const categories = result["categories"] as Array<Record<string, unknown>>;
+    assert.equal(categories.length, 1);
+    assert.equal(categories[0]?.["id"], FAKE_CATEGORY_ID);
+    assert.equal(categories[0]?.["name"], "Synthetic General");
+    assert.match(String(result["screening_note"]), /exclude_category_ids/);
+    assert.equal(result["pagination"], null, "published schema: categories are unpaginated");
+  });
+
+  test("classes_only is forwarded", async () => {
+    const { calls } = await callTool("list_categories", { classes_only: true });
+    const catCall = calls.find((call) => call.url.includes("/v1/categories"));
+    assert.ok(catCall);
+    assert.match(catCall.url, /classesOnly=true/);
   });
 });
 
@@ -612,7 +773,7 @@ describe("get_api_diagnostics — the honest-status tool", () => {
     const build = result["build"] as Record<string, unknown>;
     assert.ok("commit" in build && "dirty" in build);
     const transport = result["transport"] as Record<string, unknown>;
-    assert.equal(transport["allowlist_size"], 7);
+    assert.equal(transport["allowlist_size"], 8);
     // The first live run printed "E1 GET GET /v1/games" — the method twice.
     for (const entry of transport["allowlist"] as string[]) {
       assert.equal(/(GET|POST).*(GET|POST)/.test(entry), false, `method printed twice: ${entry}`);
@@ -725,6 +886,19 @@ describe("2026-08-18 live findings, pinned", () => {
       );
     }
     assert.ok(sawItInProse, "preimage: the stripper must be running over text that DOES contain the number");
+  });
+
+  test("live ASA class/category ids are never hardcoded as executable literals", () => {
+    // Amendment 5: discover via list_categories. 6072 (Mods class) and 6844
+    // (Custom Cosmetics) were observed live 2026-08-19; recording them here is
+    // the test, not permission to ship them as filters.
+    const stripComments = (text: string): string =>
+      text.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
+    for (const text of srcFiles()) {
+      const executable = stripComments(text);
+      assert.equal(/\b6072\b/.test(executable), false, "ASA Mods class id must not be an executable literal");
+      assert.equal(/\b6844\b/.test(executable), false, "Custom Cosmetics category id must not be an executable literal");
+    }
   });
 
   test("resolve_mod_dependencies reports the empty-tree finding rather than looking broken", async () => {

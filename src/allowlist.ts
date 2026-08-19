@@ -79,6 +79,16 @@ export const MAX_PAGE_SIZE = 50;
 /** Documented: "capped at 10000 total results ... (index + pageSize <= 10,000)". Confirmed (§4). */
 export const MAX_ADDRESSABLE_RESULTS = 10_000;
 
+/** Documented max on search `categoryIds` (vendor). Over that is refused, not truncated. */
+export const MAX_INCLUDE_CATEGORY_IDS = 10;
+
+/**
+ * Our cap on local `exclude_category_ids`. There is no vendor exclude parameter;
+ * this filter runs after the page returns. Capped so a caller cannot ask us to
+ * walk an unbounded id list on every hit.
+ */
+export const MAX_EXCLUDE_CATEGORY_IDS = 20;
+
 /**
  * One authorised endpoint.
  *
@@ -88,7 +98,7 @@ export const MAX_ADDRESSABLE_RESULTS = 10_000;
  */
 export interface EndpointEntry {
   /** The ADR's own label, so an error message and a review comment can name the same thing. */
-  id: "E1" | "E2" | "E3" | "E4" | "E5" | "E6" | "E7";
+  id: "E1" | "E2" | "E3" | "E4" | "E5" | "E6" | "E7" | "E8";
   method: HttpMethod;
   /** Anchored, with id segments bound to digits. Matched against the NORMALIZED path. */
   pattern: RegExp;
@@ -132,7 +142,7 @@ function numericPath(template: string): RegExp {
 }
 
 /**
- * THE SEVEN ENTRIES (ADR-002 §1.6). The complete set for v1.
+ * THE EIGHT ENTRIES (ADR-002 §1.6, Amendment 5). The complete set for this version.
  *
  * Order is the ADR's order and is matched first-to-last.
  *
@@ -144,12 +154,15 @@ function numericPath(template: string): RegExp {
  *       It is a documented READ, a GET, on the pinned host, and it is refused
  *       purely because it is not on this list. That test is the acceptance test
  *       for "this is an allow-list and not a method check".
- *   GET/POST /v1/fingerprints, /v1/fingerprints/fuzzy   deferred (§11.2)
+ *   GET /v1/fingerprints, /v1/fingerprints/fuzzy   deferred (§11.2)
  *   POST /v1/mods/featured                              deferred; a read POST, still not listed
- *   GET /v1/categories                                  deferred (categories / classId taxonomy)
  *   GET /v1/games/{gameId} and its versions endpoints   not needed; E1 suffices for §5
  *   GET /v1/mods/{modId}/description, .../changelog     not needed, and attacker-authorable free text
  *   /v1/minecraft/*                                     wrong game
+ *
+ * GET /v1/categories WAS deferred. Amendment 5 (2026-08-19) un-deferred it as E8
+ * so gameplay screening can name class/category ids instead of post-filtering a
+ * popularity ranking by eye. Download-url stays refused.
  */
 export const ENDPOINT_ALLOWLIST: readonly EndpointEntry[] = [
   {
@@ -214,6 +227,15 @@ export const ENDPOINT_ALLOWLIST: readonly EndpointEntry[] = [
     serves: "resolve_mod_dependencies",
     paginated: false,
     bodyKey: "fileIds",
+  },
+  {
+    id: "E8",
+    method: "GET",
+    pattern: numericPath("v1/categories"),
+    shape: "GET /v1/categories",
+    serves: "list_categories; search_mods class/category ids are discovered here, never hardcoded",
+    paginated: false,
+    bodyKey: null,
   },
 ];
 

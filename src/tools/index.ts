@@ -1,5 +1,6 @@
 import type { ToolDef } from "../registry.js";
 import type { ToolContext } from "./context.js";
+import { categoryTools } from "./categories.js";
 import { dependencyTools } from "./dependencies.js";
 import { diagnosticsTools } from "./diagnostics.js";
 import { latestFileTools } from "./latest.js";
@@ -7,11 +8,11 @@ import { modTools } from "./mods.js";
 import { searchTools } from "./search.js";
 
 /**
- * THE COMPLETE TOOL SURFACE: exactly seven tools, all tier 1.
+ * THE COMPLETE TOOL SURFACE: eight tools, all tier 1.
  *
- * Fixed by DEC-002 §11.1 and not expandable without a new board record. The
- * count is asserted in the test suite rather than only stated here, because a
- * number in a comment is not a control.
+ * DEC-002 §11.1 fixed seven. Amendment 5 (founder 2026-08-19) added
+ * `list_categories` so screening can name class/category ids. The count is
+ * asserted in the test suite rather than only stated here.
  *
  * There is no filtering here and no mode variable — see src/registry.ts. What
  * enforces the surface is `assertAllToolsAreReadOnly`, which refuses to start
@@ -19,6 +20,7 @@ import { searchTools } from "./search.js";
  */
 export const V1_TOOL_NAMES: readonly string[] = [
   "search_mods",
+  "list_categories",
   "get_mod",
   "list_mod_files",
   "get_mod_file",
@@ -30,6 +32,7 @@ export const V1_TOOL_NAMES: readonly string[] = [
 export function allTools(ctx: ToolContext): ToolDef[] {
   return [
     ...searchTools(ctx),
+    ...categoryTools(ctx),
     ...modTools(ctx),
     ...latestFileTools(ctx),
     ...dependencyTools(ctx),

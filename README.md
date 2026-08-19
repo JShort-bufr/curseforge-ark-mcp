@@ -26,7 +26,7 @@ ARK: Survival Ascended.**
 This repo's own behaviour is verified independently of the API: the endpoint allow-list, the
 host pin, the path normalization, the pagination bounds, the envelope handling, and the
 three-state absent/empty/unknown discipline. All of it is tested against an injected fake
-`fetch`, with no key and no network. **160 tests, 0 failures** at the time of writing.
+`fetch`, with no key and no network. **169 tests, 0 failures** at the time of writing.
 
 Design record: [`docs/adr/ADR-002-endpoint-allow-list.md`](docs/adr/ADR-002-endpoint-allow-list.md)
 (status: **ACCEPTED 2026-08-18, with known-open residuals** — not a verified catalog).
@@ -36,15 +36,16 @@ Every section reference below (§1, §4.3, §14.3 …) points into it.
 
 ## What it does, and what it deliberately cannot do
 
-Seven tools, all read-only:
+Eight tools, all read-only:
 
 | Tool | Answers |
 | --- | --- |
-| `search_mods` | "Which ASA mods match this term?" |
-| `get_mod` | "What is project 777001?" |
-| `list_mod_files` | "What files has this mod published?" |
-| `get_mod_file` | "What is this specific file?" |
-| `get_latest_file` | **"Is there a newer file for this mod than the one I am running?"** |
+| `search_mods` | "Which ASA mods match this term?" Include by class/category; exclude locally. A hit is a catalog row, not an install. `handoff.curseforge_mod_ids` is what to pass to nitrado-ark-mcp. |
+| `list_categories` | "What class/category ids exist for ASA?" Use this before filtering search. |
+| `get_mod` | "What is project 777001?" Includes author summary, raw status, dates, and latest file lengths. |
+| `list_mod_files` | "What files has this mod published?" Includes `file_length_bytes`. |
+| `get_mod_file` | "What is this specific file?" Includes `file_length_bytes`. No download URL. |
+| `get_latest_file` | **"Is there a newer file for this mod than the one I am running?"** Inspect `file_name` and `file_length_bytes` before treating it as a content pack. |
 | `resolve_mod_dependencies` | "What does this mod pull in?" (batched, one request per tree level) |
 | `get_api_diagnostics` | "Is it me, the key, or CurseForge?" — and "how honest is this build?" |
 
@@ -52,7 +53,12 @@ It **cannot**:
 
 - **Download or install anything.** `GET /v1/mods/{modId}/files/{fileId}/download-url` is a
   documented read, on the pinned host, and it is **refused** — because it is not on the endpoint
-  allow-list (DEC-002 §11.3). Nitrado installs mods itself.
+  allow-list (DEC-002 §11.3). Nitrado installs mods itself. A catalog row with a published file
+  is still not an install recommendation: inspect `file_name` and `file_length_bytes`. ASA
+  content packs are typically megabytes to hundreds of megabytes. A few kilobytes is still a
+  published file — this server does not open archives, and it will not invent "removed" from a
+  status integer. `allow_mod_distribution` false is common on popular ASA mods and is not
+  "taken down."
 - **Write anything, anywhere.** No allow-list entry names a mutating endpoint. CurseForge does
   operate a mutating upload API on a different host (§14.2); the host pin refuses it a second
   time for an independent reason.
@@ -61,6 +67,10 @@ It **cannot**:
   the process **refuse to start**.
 - **Touch Nitrado.** No `NITRADO_*` variable exists in this repo's configuration surface, and
   its absence is a control. This server holds no Nitrado token and reads no Nitrado config.
+  Collaboration is in the conversation: this MCP returns `handoff.curseforge_mod_ids`;
+  nitrado-ark-mcp is what would write `active-mods`. That write is still queued (DEC-002 A6).
+  Embodiment is a later in-game player agent on the founder's Steam account, not a UI that
+  calls both servers.
 - **Wake up on a timer and update your server.** No scheduler, no polling loop, no persisted
   "last seen version" state (§10). Surveillance means the model may *observe* a new version. It
   does not get to act.
@@ -130,7 +140,7 @@ not merely that something threw.
 
 Every refusal test also asserts the fake `fetch`'s **call count**, because "refused before the
 request is built" is the actual provision, and an error thrown *after* dispatch would satisfy a
-weaker assertion. And the refusal suite is preceded by a **preimage** test proving all seven
+weaker assertion. And the refusal suite is preceded by a **preimage** test proving all eight
 entries do dispatch — a refusal suite over a client that can send nothing passes perfectly and
 proves nothing.
 
@@ -146,9 +156,9 @@ Dated and sized on purpose: "verified" without a sample size is a mood, not a cl
 | --- | --- | --- |
 | U1 | The ASA `gameId` | **`83374`**, slug `ark-survival-ascended`, name `ARK Survival Ascended` — **no colon**, which an exact-match spelling would have got wrong. Still resolved live on every start; a test asserts the number appears nowhere in `src/` outside a comment. |
 | U2 | Is ASA visible to the key? | **Yes.** 38 games visible, ASA among them. Not v1-blocking. |
-| U3 | `Mod` field paths | **All correct.** `id`, `gameId`, `name`, `slug`, `dateModified`, `links.websiteUrl`, `categories`, `allowModDistribution`, `latestFiles`, `latestFilesIndexes`. |
-| U4 | `File` field paths | **All correct.** `id`, `modId`, `displayName`, `fileName`, `fileDate`, `gameVersions`, `sortableGameVersions`, `dependencies`, `releaseType`, `isAvailable`. |
-| U8 | `pagination` presence | Present on the paginated endpoints (games, search, files), absent on single-record and bulk reads — which is exactly the split this client was built to expect. |
+| U3 | `Mod` field paths | **All correct.** `id`, `gameId`, `name`, `slug`, `summary`, `status`, `dateCreated`, `dateModified`, `dateReleased`, `links.websiteUrl`, `authors`, `categories`, `allowModDistribution`, `isAvailable`, `latestFiles`, `latestFilesIndexes`. `summary`/`status`/`authors`/`dates` re-confirmed present 2026-08-19. |
+| U4 | `File` field paths | **All correct.** `id`, `modId`, `displayName`, `fileName`, `fileDate`, `fileLength`, `gameVersions`, `sortableGameVersions`, `dependencies`, `releaseType`, `isAvailable`. `fileLength` re-confirmed present 2026-08-19 (Admin Panel remaining files: 6888 bytes). |
+| U8 | `pagination` presence | Present on the paginated endpoints (games, search, files), absent on single-record and bulk reads. **E8** (`GET /v1/categories`) confirmed live 2026-08-19: `{data}` only, `pagination` null. Discover class/category names via `list_categories`; do not hardcode those ids. |
 | U9 | Do ASA mods populate the optional fields? | `latestFiles`, `latestFilesIndexes`, `sortableGameVersions`, `gameVersions`: **300/300**. `dependencies`: present on 100%, non-empty on **0%**. |
 | U11 | Rate-limit headers | **CurseForge sends none.** Full header enumeration on a live GET and POST found transport/CDN headers only. So `null` is not a matching bug in this client — but it is **not** a claim that no limit exists, and the self-imposed pacing stays. |
 | U12 | Pagination past index 0 | Works; `totalCount` stable at 6848 across pages. **But** past the end of a result set CurseForge returns `resultCount: 0` *and* `totalCount: 0` — `totalCount` describes the response, not the query. Tool output now says "past the end" rather than letting that read as "found nothing". |
@@ -243,7 +253,7 @@ This server is first-party stdio, not a Runlayer-managed catalog server.
 
 **The server refuses to start without a key**, naming both locations it searched, the exact
 variable, and the fact that the key is not self-service. A stdio MCP server that starts cleanly
-and then throws on all seven tools is a miserable thing to debug.
+and then throws on every tool is a miserable thing to debug.
 
 ### About the key
 
@@ -306,7 +316,7 @@ configured and **never its value, a prefix of it, or its length**.
 
 ```
 src/
-  allowlist.ts    THE CHOKEPOINT — seven entries, host pin, normalization, bounds, body checks
+  allowlist.ts    THE CHOKEPOINT — eight entries, host pin, normalization, bounds, body checks
   client.ts       the single transport; the ONLY place x-api-key is attached; envelope unwrap
   config.ts       refuse-to-start; no NITRADO_*, no mode switch, no settable base URL
   coerce.ts       empty / absent / unknown, kept apart
@@ -317,7 +327,7 @@ src/
   probe-plan.ts   one probe per unverified row, asserted complete by a test
   server.ts       stdio entry point
   smoke.ts        the falsification run (live with a key, plan-only without)
-  tools/          the seven tools
+  tools/          the eight tools
 test/             156 tests; fixtures are synthetic in content, structural in shape
 scripts/          buildinfo generator, test enumerator
 ```

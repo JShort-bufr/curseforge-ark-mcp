@@ -11,7 +11,7 @@ import { allTools } from "./tools/index.js";
 
 async function main(): Promise<void> {
   // Resolve the credential before anything else and fail HERE (ADR-002 §2).
-  // A stdio MCP server that starts cleanly and then throws on all seven tools is
+  // A stdio MCP server that starts cleanly and then throws on every tool is
   // a miserable thing to debug.
   const envSources = bootstrapEnv();
   const config = loadConfig(process.env, envSources);

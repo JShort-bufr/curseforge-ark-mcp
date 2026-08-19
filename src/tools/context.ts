@@ -28,7 +28,8 @@ export interface ToolContext {
  * skimmed.
  */
 export const FIELD_PATH_NOTE =
-  "Mod/File field paths confirmed against live responses 2026-08-18. Still unconfirmed: the FileDependency " +
+  "Mod/File field paths confirmed against live responses 2026-08-18 (summary/status/dates/authors/fileLength " +
+  "re-confirmed present 2026-08-19). Still unconfirmed: the FileDependency " +
   "shape, and the meaning of the releaseType/relationType integers — both surfaced raw, never mapped.";
 
 /**
@@ -43,9 +44,10 @@ export const VERIFICATION_BLOCK = {
   sample: "748 distinct ARK: Survival Ascended mods, 1899 file records",
   confirmed:
     "Every Mod and File path this client reads was present and correctly typed in live responses: Mod " +
-    "id/gameId/name/slug/dateModified/links.websiteUrl/categories/allowModDistribution/latestFiles/" +
-    "latestFilesIndexes, and File id/modId/displayName/fileName/fileDate/isAvailable/gameVersions/" +
-    "sortableGameVersions/releaseType/dependencies. No field path needed correcting.",
+    "id/gameId/name/slug/summary/status/dateCreated/dateModified/dateReleased/links.websiteUrl/authors/" +
+    "categories/allowModDistribution/isAvailable/latestFiles/latestFilesIndexes, and File id/modId/" +
+    "displayName/fileName/fileDate/fileLength/isAvailable/gameVersions/sortableGameVersions/releaseType/" +
+    "dependencies. No field path needed correcting.",
   still_unconfirmed:
     "The FileDependency shape { modId, relationType } was NEVER observed: 0 of 1899 sampled ASA files " +
     "declared a dependency, with the `dependencies` key present and empty every time. So the traversal's " +
@@ -106,6 +108,76 @@ export const RELATION_TYPE_NOTE =
   "list that is wrong in a way nobody would check. OBSERVED LIVE 2026-08-18: no relationType integer has ever " +
   "been seen, because no ASA file in a 1899-file sample declared any dependency at all.";
 
+/**
+ * A catalog row is not an install recommendation.
+ *
+ * Founder 2026-08-19: ranking by popularity recommended Admin Panel (id 929868)
+ * as a gameplay pick. Live record: status 4, isAvailable true, summary "Admin
+ * Panel Tool", allowModDistribution false — the same shape as currently updated
+ * content packs. What distinguished it was the remaining files: four zips named
+ * "* 98.zip" dated 2025-11-06, fileLength 6888 bytes. Real ASA packs in the same
+ * sample were megabytes to hundreds of megabytes. The API does not say "removed";
+ * the published file list does. This note rides once per tool result so a model
+ * cannot treat name + download rank as sufficient.
+ */
+export const CURATION_NOTE =
+  "A search hit or mod record is a catalog row, not an install recommendation. Before treating a mod as " +
+  "usable, inspect latest_files / the file list: file_name and file_length_bytes. ASA content packs are " +
+  "typically megabytes to hundreds of megabytes; a few kilobytes is still a published file — this server " +
+  "does not open archives and does not guess that a small zip is a stub. allow_mod_distribution false is " +
+  "common on popular ASA mods and is NOT 'removed from CurseForge'. status_raw is an unmapped integer; " +
+  "observed live 2026-08-19: 4 on both an actively updated pack and a project whose only remaining files " +
+  "were 6.8KB placeholders. summary is the author's short plain-text blurb, not the HTML description.";
+
+/**
+ * The two-MCP collaboration, said once so a search result cannot be mistaken
+ * for an install. Founder 2026-08-19: CurseForge screens, Nitrado installs.
+ * Embodiment is an in-game player agent (Steam / autonomous ASA character), not
+ * a UI that calls both servers. Neither server holds the other's credential
+ * (DEC-002 Ruling 1 / ADR-002 §9). `set_active_mods` remains queued (DEC-002 A6).
+ */
+export const HANDOFF_NOTE =
+  "This server screens CurseForge mods. It does not install them. Pass curseforge_mod_ids to the sibling " +
+  "nitrado-ark-mcp in the same conversation — nitrado-ark answers which ids are in active-mods; writing " +
+  "that setting is still queued (DEC-002 A6) and is a Nitrado restart. Neither MCP holds the other's " +
+  "credential. This is catalog/install infrastructure, not an in-game player agent.";
+
+export function shapeCategory(category: unknown): Record<string, unknown> {
+  return {
+    id: asNumber(at(category, "id")),
+    game_id: asNumber(at(category, "gameId")),
+    name: asString(at(category, "name")),
+    slug: asString(at(category, "slug")),
+    url: asString(at(category, "url")),
+    is_class: asBool(at(category, "isClass")),
+    class_id: asNumber(at(category, "classId")),
+    parent_category_id: asNumber(at(category, "parentCategoryId")),
+    display_index: asNumber(at(category, "displayIndex")),
+  };
+}
+
+/** Category ids a raw Mod record claims. Used to apply exclude_category_ids locally. */
+export function rawModCategoryIds(mod: unknown): number[] {
+  const list = asArray(at(mod, "categories"));
+  if (list === null) return [];
+  const ids: number[] = [];
+  for (const category of list) {
+    const id = asNumber(at(category, "id"));
+    if (id !== null) ids.push(id);
+  }
+  return ids;
+}
+
+/** Author summary is short in this catalog; bound it so a future long value cannot flood context. */
+export const SUMMARY_MAX_CHARS = 1000;
+
+export function boundedSummary(value: unknown): { summary: string | null; summary_truncated: boolean | null } {
+  const raw = asString(value);
+  if (raw === null) return { summary: null, summary_truncated: null };
+  if (raw.length <= SUMMARY_MAX_CHARS) return { summary: raw, summary_truncated: false };
+  return { summary: raw.slice(0, SUMMARY_MAX_CHARS), summary_truncated: true };
+}
+
 /** A page block, with its completeness sentence, ready to drop into a tool result. */
 export function pageBlock(page: PageDescriptor | null): Record<string, unknown> {
   const note = describeCompleteness(page);
@@ -128,26 +200,40 @@ export function pageBlock(page: PageDescriptor | null): Record<string, unknown> 
  * was never reviewed (§12.3), and this is a curation surface, not a proxy.
  */
 export function shapeMod(mod: unknown): Record<string, unknown> {
+  const authors = asArray(at(mod, "authors"));
+  const { summary, summary_truncated } = boundedSummary(at(mod, "summary"));
   return {
     id: asNumber(at(mod, "id")),
     game_id: asNumber(at(mod, "gameId")),
     name: asString(at(mod, "name")),
     slug: asString(at(mod, "slug")),
+    summary,
+    summary_truncated,
+    status_raw: asNumber(at(mod, "status")),
+    date_created: asString(at(mod, "dateCreated")),
     date_modified: asString(at(mod, "dateModified")),
+    date_released: asString(at(mod, "dateReleased")),
     website_url: asString(at(mod, "links", "websiteUrl")),
+    authors:
+      authors === null
+        ? null
+        : authors.map((author) => ({
+            name: asString(at(author, "name")),
+            url: asString(at(author, "url")),
+          })),
     /**
-     * Surfaced as a count plus the raw ids, not as a taxonomy. `GET /v1/categories`
-     * is deferred (§1.7) and no allow-list entry was added for it, so this client
-     * cannot name a category — only report that the mod claims some.
+     * Surfaced as ids plus names from the mod record. Canonical taxonomy for the
+     * game is `list_categories` (E8). Search can include or exclude by those ids.
      */
     categories_raw: (asArray(at(mod, "categories")) ?? []).map((category) => ({
       id: asNumber(at(category, "id")),
       name: asString(at(category, "name")),
     })),
     categories_note:
-      "Category/class taxonomy is DEFERRED (DEC-002 §11.2). GET /v1/categories is not on the allow-list, so " +
-      "these are whatever the mod record carried and nothing resolves them.",
+      "Category names on a mod record are whatever that record carried. Canonical class/category ids for " +
+      "this game come from list_categories (GET /v1/categories), not from guessing.",
     allow_mod_distribution: asBool(at(mod, "allowModDistribution")),
+    is_available: asBool(at(mod, "isAvailable")),
     latest_files: (asArray(at(mod, "latestFiles")) ?? []).map(shapeFile),
     latest_files_indexes: asArray(at(mod, "latestFilesIndexes")),
     field_paths: FIELD_PATH_NOTE,
@@ -169,9 +255,11 @@ export function shapeMod(mod: unknown): Record<string, unknown> {
  * whose fixture CONTAINS a downloadUrl specifically to prove it does not survive.
  *
  * Also omitted, for the same reason but lower stakes: fileStatus, hashes,
- * fileLength, downloadCount, fileSizeOnDisk, alternateFileId, isServerPack,
- * fileFingerprint, modules, cookingInfo. All real, none needed by v1's seven
- * tools, and each one is context a model would have to read past.
+ * downloadCount, fileSizeOnDisk, alternateFileId, isServerPack,
+ * fileFingerprint, modules, cookingInfo. All real. `fileLength` was in this
+ * list until 2026-08-19: a yanked project kept status/isAvailable looking
+ * identical to a live pack, and the remaining files were 6888 bytes. Length
+ * is now a curation field, not clutter.
  */
 export function shapeFile(file: unknown): Record<string, unknown> {
   return {
@@ -180,6 +268,7 @@ export function shapeFile(file: unknown): Record<string, unknown> {
     display_name: asString(at(file, "displayName")),
     file_name: asString(at(file, "fileName")),
     file_date: asString(at(file, "fileDate")),
+    file_length_bytes: asNumber(at(file, "fileLength")),
     is_available: asBool(at(file, "isAvailable")),
     game_versions: asArray(at(file, "gameVersions")),
     sortable_game_versions: asArray(at(file, "sortableGameVersions")),

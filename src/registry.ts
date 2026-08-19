@@ -70,9 +70,9 @@ export function assertAllToolsAreReadOnly(
     if (tool.tier !== 1) {
       problems.push(
         `Tool "${tool.name}" declares tier ${tool.tier}. This server is read-only by construction: DEC-002 ` +
-          `§11.1 fixes the v1 surface at seven tier-1 tools, DEC-002 Ruling 2 refuses mod authoring outright, ` +
+          `§11.1 started the v1 surface at seven tier-1 tools (Amendment 5 added list_categories), DEC-002 Ruling 2 refuses mod authoring outright, ` +
           `and ADR-002 §10 refuses any update-then-deploy loop. There is no allow-list entry a mutating tool ` +
-          `could use — the seven endpoints in src/allowlist.ts are all reads — so a tier-2 tool here would ` +
+          `could use — the endpoints in src/allowlist.ts are all reads — so a tier-2 tool here would ` +
           `register successfully and then be refused at the transport on every call. Registering it is refused ` +
           `at startup instead, because the honest place to have this argument is a board record and a new ADR, ` +
           `not a stack trace.`,

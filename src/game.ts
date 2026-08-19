@@ -189,7 +189,7 @@ export function createGameResolver(client: CurseForgeClient, options: ResolverOp
       if (cached !== null) return cached;
       // Share one in-flight attempt. Seven tools may be called concurrently and
       // the first thing each does is resolve; without this, the first turn after
-      // startup spends seven requests answering the same question against an API
+      // startup spends eight requests answering the same question against an API
       // whose rate limit is undocumented.
       if (inFlight === null) {
         inFlight = attempt()

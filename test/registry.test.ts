@@ -11,12 +11,13 @@ import { makeContext, repoRoot, standardRoutes } from "./fixtures.js";
 
 /** ADR-002 §7, §8, §11 — the surface, and the assertion that keeps it read-only. */
 
-describe("§7 — exactly seven tools, all tier 1", () => {
-  test("the surface is the seven DEC-002 §11.1 names, in that set", () => {
+describe("§7 — the tool surface, all tier 1", () => {
+  test("the surface is the Amendment-5 names, in that set", async () => {
     const { ctx } = makeContext(standardRoutes());
     const tools = allTools(ctx);
-    assert.equal(tools.length, 7, "the v1 surface is fixed at seven and is not expandable without a board record");
+    assert.equal(tools.length, V1_TOOL_NAMES.length);
     assert.deepEqual([...tools.map((tool) => tool.name)].sort(), [...V1_TOOL_NAMES].sort());
+    assert.ok(V1_TOOL_NAMES.includes("list_categories"));
   });
 
   test("every tool declares tier 1", () => {
@@ -38,7 +39,7 @@ describe("§7 — exactly seven tools, all tier 1", () => {
 });
 
 describe("§11 — THE BOOT ASSERTION: a mutating tool is a process that will not start", () => {
-  test("PREIMAGE: the real seven pass", () => {
+  test("PREIMAGE: the real tools pass", () => {
     const { ctx } = makeContext(standardRoutes());
     assert.doesNotThrow(() => assertAllToolsAreReadOnly(allTools(ctx)));
   });

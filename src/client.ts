@@ -78,9 +78,9 @@ export interface ClientOptions {
    *
    * Injectable for one reason, and it is the opposite of the sibling repo's:
    * there the list ships EMPTY so a refusal suite needed a synthetic list to
-   * have anything to match. Here the real list has seven entries, so the
+   * have anything to match. Here the real list has eight entries, so the
    * preimage tests run against the SHIPPED list and this seam exists only to
-   * prove the matcher is not hardcoded to those seven — e.g. that first-match
+   * prove the matcher is not hardcoded to those eight — e.g. that first-match
    * ordering is deterministic. Refusal tests must use the real list.
    */
   endpoints?: readonly EndpointEntry[];

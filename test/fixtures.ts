@@ -63,6 +63,10 @@ export const FAKE_OTHER_RELEASE_TYPE = 72;
 
 export const FAKE_GAME_VERSION = "9.99.9-synthetic";
 
+export const FAKE_CLASS_ID = 60_072;
+export const FAKE_CATEGORY_ID = 60_076;
+export const FAKE_COSMETIC_CATEGORY_ID = 68_044;
+
 /**
  * The download URL that must never reach a tool result. Distinctive so a leak test
  * can search for it by substring, in the sibling repo's idiom.
@@ -188,6 +192,7 @@ export function fileRecord(
     fileDate: "2026-08-10T12:00:00Z",
     releaseType: FAKE_RELEASE_TYPE,
     isAvailable: true,
+    fileLength: 2_233_899,
     gameVersions: [FAKE_GAME_VERSION],
     // Inner shape copied from a live record (2026-08-18); values invented.
     sortableGameVersions: [
@@ -223,6 +228,8 @@ export function modRecord(
     slug: string;
     latestFiles: unknown[];
     dateModified: string;
+    summary: string;
+    categories: Array<{ id: number; name: string }>;
   }> = {},
 ) {
   return {
@@ -231,6 +238,12 @@ export function modRecord(
     name: "Synthetic Structures Plus",
     slug: "synthetic-structures-plus",
     dateModified: "2026-08-10T12:00:00Z",
+    dateCreated: "2026-01-01T00:00:00Z",
+    dateReleased: "2026-08-10T12:00:00Z",
+    summary: "Synthetic QoL structures for tests.",
+    status: 4,
+    isAvailable: true,
+    authors: [{ name: "SyntheticAuthor", url: "https://example.invalid/members/synthetic" }],
     allowModDistribution: true,
     links: { websiteUrl: "https://example.invalid/synthetic-mod" },
     categories: [{ id: 4_242, name: "Synthetic Category" }],
@@ -249,6 +262,32 @@ export function modRecord(
   };
 }
 
+/** One `Category` record (GET /v1/categories). Shape from the published schema; values invented. */
+export function categoryRecord(
+  overrides: Partial<{
+    id: number;
+    name: string;
+    slug: string;
+    isClass: boolean;
+    classId: number | null;
+  }> = {},
+) {
+  return {
+    id: FAKE_CATEGORY_ID,
+    gameId: FAKE_GAME_ID,
+    name: "Synthetic General",
+    slug: "synthetic-general",
+    url: "https://example.invalid/categories/synthetic-general",
+    iconUrl: "https://example.invalid/icons/synthetic.png",
+    dateModified: "2026-01-01T00:00:00Z",
+    isClass: false,
+    classId: FAKE_CLASS_ID,
+    parentCategoryId: FAKE_CLASS_ID,
+    displayIndex: 1,
+    ...overrides,
+  };
+}
+
 /**
  * PREIMAGE for the Mod field-path tests.
  *
@@ -263,6 +302,12 @@ export const MOD_FIELD_PREIMAGE: readonly string[] = [
   "name",
   "slug",
   "dateModified",
+  "dateCreated",
+  "dateReleased",
+  "summary",
+  "status",
+  "isAvailable",
+  "authors",
   "allowModDistribution",
   "links.websiteUrl",
   "categories",
@@ -278,11 +323,24 @@ export const FILE_FIELD_PREIMAGE: readonly string[] = [
   "displayName",
   "fileName",
   "fileDate",
+  "fileLength",
   "isAvailable",
   "gameVersions",
   "sortableGameVersions",
   "releaseType",
   "dependencies",
+];
+
+export const CATEGORY_FIELD_PREIMAGE: readonly string[] = [
+  "id",
+  "gameId",
+  "name",
+  "slug",
+  "url",
+  "isClass",
+  "classId",
+  "parentCategoryId",
+  "displayIndex",
 ];
 
 /** Read a dotted path out of a plain object, for preimage assertions. */
@@ -313,6 +371,7 @@ export function standardRoutes(): StubRoute[] {
     { match: /\/v1\/mods\/\d+$/, method: "GET", body: { data: modRecord() } },
     { match: /\/v1\/mods\/files$/, method: "POST", body: { data: [fileRecord()] } },
     { match: /\/v1\/mods$/, method: "POST", body: { data: [modRecord()] } },
+    { match: /\/v1\/categories/, method: "GET", body: { data: [categoryRecord()] } },
   ];
 }
 

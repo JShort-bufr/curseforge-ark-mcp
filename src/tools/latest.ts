@@ -3,7 +3,7 @@ import { MAX_PAGE_SIZE } from "../allowlist.js";
 import { asArray, asNumber, asString, at } from "../coerce.js";
 import { CurseForgeError } from "../errors.js";
 import type { ToolDef } from "../registry.js";
-import { RELEASE_TYPE_NOTE, shapeFile, verificationBlock, type ToolContext } from "./context.js";
+import { RELEASE_TYPE_NOTE, shapeFile, verificationBlock, CURATION_NOTE, type ToolContext } from "./context.js";
 
 /**
  * `get_latest_file` — THE SURVEILLANCE PRIMITIVE (ADR-002 §7.1).
@@ -97,7 +97,8 @@ export function latestFileTools(ctx: ToolContext): ToolDef[] {
         "then orders by fileDate. There is no named release/beta/alpha filter because CurseForge publishes " +
         "no value table for that integer (ADR-002 §14.3 U7) and this server will not invent one. Every " +
         "answer restates the ordering used, whether the default was applied, the filter applied, how many " +
-        "candidates were considered, and where the candidates came from. Read-only.",
+        "candidates were considered, and where the candidates came from. The matched file includes " +
+        "file_length_bytes; inspect that and file_name before treating it as a content pack. Read-only.",
       inputSchema: {
         mod_id: z.number().int().nonnegative().describe("CurseForge numeric mod (project) id."),
         selection: z
@@ -196,6 +197,7 @@ export function latestFileTools(ctx: ToolContext): ToolDef[] {
           candidates_after_filter: filtered.length,
           fallback_page: fallbackPage,
           release_type_note: RELEASE_TYPE_NOTE,
+          curation_note: CURATION_NOTE,
           verification: verificationBlock(),
         };
 
@@ -248,8 +250,10 @@ export function latestFileTools(ctx: ToolContext): ToolDef[] {
           latest_file: shapeFile(winner.file),
           comparison_hint:
             "To decide whether your server is behind, compare this file's id and fileDate against the file " +
-            "you are running. This server does NOT know what your server is running and must not ask Nitrado " +
-            "(ADR-002 §9) — the correlation happens in the conversation, not between the two servers.",
+            "you are running. Also inspect file_name and file_length_bytes: a kilobyte-scale zip is still a " +
+            "published file, and this server does not open archives. This server does NOT know what your " +
+            "server is running and must not ask Nitrado (ADR-002 §9) — the correlation happens in the " +
+            "conversation, not between the two servers.",
         };
       },
     },

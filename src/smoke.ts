@@ -158,6 +158,20 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  // 2b. Categories. Amendment 5 screening cut. E8 confirmed unpaginated live
+  //     2026-08-19 (`{data}` only). If a pagination object appears, that finding
+  //     has inverted and belongs in an ADR amendment, not a silent unwrap.
+  console.log("\n── list_categories (E8, Amendment 5; U8: unpaginated, confirmed live) ──");
+  const categories = (await run("list_categories", { classes_only: true })) as Record<string, unknown>;
+  console.log(assertNoSecrets("list_categories", categories, config.apiKey));
+  if (categories["pagination"] !== null) {
+    console.error(
+      "\nGET /v1/categories returned a pagination object. The published schema said it would not. " +
+        "Amend ADR-002 §14.3 U8 in place: E8 is paginated after all, and list_categories must stop " +
+        "treating a missing page as the expected shape.",
+    );
+  }
+
   // 3. Files. The File shape, its dependency edges, and the two unmapped enums
   //    (U4, U5, U6, U7, U9).
   console.log(`\n── list_mod_files on mod ${firstId} (U4, U5, U6, U7, U9) ──`);

@@ -3,7 +3,7 @@ import { MAX_PAGE_SIZE } from "../allowlist.js";
 import { asArray } from "../coerce.js";
 import { CurseForgeError } from "../errors.js";
 import type { ToolDef } from "../registry.js";
-import { pageBlock, shapeFile, shapeMod, verificationBlock, type ToolContext } from "./context.js";
+import { pageBlock, shapeFile, shapeMod, verificationBlock, CURATION_NOTE, type ToolContext } from "./context.js";
 
 const modIdParam = z
   .number()
@@ -19,9 +19,11 @@ export function modTools(ctx: ToolContext): ToolDef[] {
       title: "Get one mod record",
       tier: 1,
       description:
-        "Fetch a single CurseForge mod (project) record by numeric id: name, slug, last-modified date, " +
-        "website link, and its latestFiles with their raw releaseType integers. This is a single-record " +
-        "endpoint, so it carries no pagination and none is invented. Read-only. v0: all field paths unverified.",
+        "Fetch a single CurseForge mod (project) record by numeric id: name, slug, author summary, raw " +
+        "status integer, created/modified/released dates, website link, and its latestFiles with file " +
+        "length in bytes and raw releaseType integers. A record is a catalog row, not an install " +
+        "recommendation — inspect file_name and file_length_bytes. This is a single-record endpoint, so " +
+        "it carries no pagination and none is invented. Read-only. v0: all field paths unverified.",
       inputSchema: { mod_id: modIdParam },
       handler: async (args) => {
         const modId = args["mod_id"] as number;
@@ -32,6 +34,7 @@ export function modTools(ctx: ToolContext): ToolDef[] {
         return {
           requested_mod_id: modId,
           mod: shapeMod(data),
+          curation_note: CURATION_NOTE,
           // null on a single-record endpoint is NORMAL and is not synthesised
           // into a one-page descriptor (§3).
           pagination: page,
@@ -45,8 +48,9 @@ export function modTools(ctx: ToolContext): ToolDef[] {
       tier: 1,
       description:
         "List the published files for one mod, paginated. Each file carries its raw releaseType integer, its " +
-        "game versions, and its dependency edges with raw relationType integers — none of those integers is " +
-        `mapped to a label, because CurseForge publishes no value table for either. Page size is capped at ` +
+        "game versions, file_length_bytes, and its dependency edges with raw relationType integers — none of " +
+        "those integers is mapped to a label, because CurseForge publishes no value table for either. Inspect " +
+        `file_name and file_length_bytes before treating a file as a content pack. Page size is capped at ` +
         `${MAX_PAGE_SIZE}; an over-large request is refused rather than clamped. Read-only. v0: all field ` +
         "paths unverified.",
       inputSchema: {
@@ -97,6 +101,7 @@ export function modTools(ctx: ToolContext): ToolDef[] {
           // a real answer, distinct from the error above (§6).
           file_count_on_this_page: files.length,
           files: files.map(shapeFile),
+          curation_note: CURATION_NOTE,
           ...pageBlock(page),
           verification: verificationBlock(),
         };
@@ -108,10 +113,11 @@ export function modTools(ctx: ToolContext): ToolDef[] {
       tier: 1,
       description:
         "Fetch a single file record for a mod by numeric mod id and file id: display name, file name, file " +
-        "date, game versions, raw releaseType integer, and dependency edges with raw relationType integers. " +
-        "NOTE: this tool does NOT return a download URL. The download-url endpoint is deliberately absent " +
-        "from this server's endpoint allow-list (DEC-002 §11.3) — this server curates and reports, it never " +
-        "downloads or installs. Read-only. v0: all field paths unverified.",
+        "date, file_length_bytes, game versions, raw releaseType integer, and dependency edges with raw " +
+        "relationType integers. Inspect file_name and file_length_bytes before treating a file as a content " +
+        "pack. NOTE: this tool does NOT return a download URL. The download-url endpoint is deliberately " +
+        "absent from this server's endpoint allow-list (DEC-002 §11.3) — this server curates and reports, " +
+        "it never downloads or installs. Read-only. v0: all field paths unverified.",
       inputSchema: {
         mod_id: modIdParam,
         file_id: z.number().int().nonnegative().describe("CurseForge numeric file id."),
@@ -128,6 +134,7 @@ export function modTools(ctx: ToolContext): ToolDef[] {
           requested_file_id: fileId,
           file: shapeFile(data),
           pagination: page,
+          curation_note: CURATION_NOTE,
           download_url_note:
             "No download URL is available from this server by design. GET /v1/mods/{modId}/files/{fileId}/" +
             "download-url is a documented read on the pinned host and is still refused, because it is not on " +

@@ -112,7 +112,7 @@ export function bootstrapEnv(): EnvSourceInfo {
  * REFUSE TO START WITHOUT A KEY (ADR-002 §2).
  *
  * Ported from the sibling repo's reasoning, which applies here unchanged: a
- * stdio MCP server that starts cleanly and then throws on all seven tools is a
+ * stdio MCP server that starts cleanly and then throws on every tool is a
  * miserable thing to debug.
  *
  * The message names BOTH locations checked, the exact variable name, and the one
